@@ -1,2 +1,4 @@
 .env
 vendor/
+config/campaigns.php
+generate-design-doc.py
