@@ -19,7 +19,7 @@ class Generator
      *
      * @return int The strategy ID
      */
-    public function generate(int $projectId, string $platform, string $campaignType, array $context = []): int
+    public function generate(int $projectId, string $platform = 'all', string $campaignType = 'full', array $context = []): int
     {
         $db = DB::get();
 
@@ -66,13 +66,23 @@ class Generator
         $template = file_get_contents($templatePath);
         $db = DB::get();
 
-        // Get budget
+        // Get all budgets for this project
         $budgetStmt = $db->prepare(
-            'SELECT daily_budget_aud FROM budgets WHERE project_id = ? AND platform = ?'
+            'SELECT platform, daily_budget_aud FROM budgets WHERE project_id = ?'
         );
-        $budgetStmt->execute([$project['id'], $platform]);
-        $budgetRow = $budgetStmt->fetch();
-        $budget = $budgetRow ? '$' . number_format($budgetRow['daily_budget_aud'], 2) : 'Not set';
+        $budgetStmt->execute([$project['id']]);
+        $budgets = $budgetStmt->fetchAll();
+
+        $monthlyTotal = 0;
+        $budgetLines = [];
+        foreach ($budgets as $b) {
+            $monthly = $b['daily_budget_aud'] * 30;
+            $monthlyTotal += $monthly;
+            $budgetLines[] = ucfirst($b['platform']) . ': $' . number_format($monthly, 0) . '/month ($' . number_format($b['daily_budget_aud'], 2) . '/day)';
+        }
+        $budgetText = $monthlyTotal > 0
+            ? '$' . number_format($monthlyTotal, 0) . '/month total (' . implode(', ', $budgetLines) . ')'
+            : 'Not set';
 
         // Get goals
         $goalsStmt = $db->prepare(
@@ -104,15 +114,19 @@ class Generator
             }
         }
 
-        // Replace placeholders
+        // Replace placeholders — new template vars
         $replacements = [
-            '{{PROJECT_NAME}}'  => $project['display_name'] ?: $project['name'],
-            '{{WEBSITE}}'       => $project['website_url'] ?? 'Not specified',
-            '{{PLATFORM}}'      => ucfirst($platform),
-            '{{CAMPAIGN_TYPE}}' => ucfirst($campaignType),
-            '{{BUDGET}}'        => $budget,
-            '{{GOALS}}'         => trim($goalsText),
-            '{{CONTEXT}}'       => $contextText,
+            '{{PROJECT_NAME}}'           => $project['display_name'] ?: $project['name'],
+            '{{WEBSITE}}'                => $project['website_url'] ?? 'Not specified',
+            '{{BUDGET}}'                 => $budgetText,
+            '{{GOALS}}'                  => trim($goalsText),
+            '{{ACCOUNT_MATURITY}}'       => $context['account_maturity'] ?? 'new account with zero history',
+            '{{PRICING_MODEL}}'          => $context['pricing_model'] ?? 'Not specified',
+            '{{PRIMARY_CONVERSION}}'     => $context['primary_conversion'] ?? 'purchase',
+            '{{SECONDARY_CONVERSIONS}}'  => $context['secondary_conversions'] ?? 'sign_up, add_to_cart',
+            '{{TARGET_MARKETS}}'         => $context['target_markets'] ?? 'Australia (English)',
+            '{{DATE}}'                   => date('Y-m-d'),
+            '{{CONTEXT}}'               => $contextText,
         ];
 
         return str_replace(array_keys($replacements), array_values($replacements), $template);
