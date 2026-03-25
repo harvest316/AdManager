@@ -3,14 +3,14 @@
 namespace AdManager\Ads;
 
 use AdManager\Client;
-use Google\Ads\GoogleAds\V18\Common\AdTextAsset;
-use Google\Ads\GoogleAds\V18\Common\ResponsiveSearchAdInfo;
-use Google\Ads\GoogleAds\V18\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
-use Google\Ads\GoogleAds\V18\Enums\ServedAssetFieldTypeEnum\ServedAssetFieldType;
-use Google\Ads\GoogleAds\V18\Resources\Ad;
-use Google\Ads\GoogleAds\V18\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V18\Services\AdGroupAdOperation;
-use Google\Ads\GoogleAds\Util\V18\ResourceNames;
+use Google\Ads\GoogleAds\V20\Common\AdTextAsset;
+use Google\Ads\GoogleAds\V20\Common\ResponsiveSearchAdInfo;
+use Google\Ads\GoogleAds\V20\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V20\Enums\ServedAssetFieldTypeEnum\ServedAssetFieldType;
+use Google\Ads\GoogleAds\V20\Resources\Ad;
+use Google\Ads\GoogleAds\V20\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V20\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\Util\V20\ResourceNames;
 
 class ResponsiveSearch
 {

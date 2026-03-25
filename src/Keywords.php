@@ -2,15 +2,15 @@
 
 namespace AdManager;
 
-use Google\Ads\GoogleAds\V18\Common\KeywordInfo;
-use Google\Ads\GoogleAds\V18\Enums\KeywordMatchTypeEnum\KeywordMatchType;
-use Google\Ads\GoogleAds\V18\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
-use Google\Ads\GoogleAds\V18\Enums\CampaignCriterionStatusEnum\CampaignCriterionStatus;
-use Google\Ads\GoogleAds\V18\Resources\AdGroupCriterion;
-use Google\Ads\GoogleAds\V18\Resources\CampaignCriterion;
-use Google\Ads\GoogleAds\V18\Services\AdGroupCriterionOperation;
-use Google\Ads\GoogleAds\V18\Services\CampaignCriterionOperation;
-use Google\Ads\GoogleAds\Util\V18\ResourceNames;
+use Google\Ads\GoogleAds\V20\Common\KeywordInfo;
+use Google\Ads\GoogleAds\V20\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V20\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
+use Google\Ads\GoogleAds\V20\Enums\CampaignCriterionStatusEnum\CampaignCriterionStatus;
+use Google\Ads\GoogleAds\V20\Resources\AdGroupCriterion;
+use Google\Ads\GoogleAds\V20\Resources\CampaignCriterion;
+use Google\Ads\GoogleAds\V20\Services\AdGroupCriterionOperation;
+use Google\Ads\GoogleAds\V20\Services\CampaignCriterionOperation;
+use Google\Ads\GoogleAds\Util\V20\ResourceNames;
 
 class Keywords
 {

@@ -3,18 +3,19 @@
 namespace AdManager\Campaign;
 
 use AdManager\Client;
-use Google\Ads\GoogleAds\V18\Common\ManualCpc;
-use Google\Ads\GoogleAds\V18\Common\TargetCpa;
-use Google\Ads\GoogleAds\V18\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V18\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V18\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
-use Google\Ads\GoogleAds\V18\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V18\Resources\Campaign;
-use Google\Ads\GoogleAds\V18\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V18\Resources\Campaign\NetworkSettings;
-use Google\Ads\GoogleAds\V18\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V18\Services\CampaignOperation;
-use Google\Ads\GoogleAds\Util\V18\ResourceNames;
+use Google\Ads\GoogleAds\V20\Common\ManualCpc;
+use Google\Ads\GoogleAds\V20\Common\TargetCpa;
+use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;
+use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V20\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
+use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V20\Resources\Campaign;
+use Google\Ads\GoogleAds\V20\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V20\Resources\Campaign\NetworkSettings;
+use Google\Ads\GoogleAds\V20\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V20\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\Util\V20\ResourceNames;
 
 class Search
 {
@@ -113,7 +114,11 @@ class Search
             GAQL;
 
         $rows = [];
-        foreach ($service->search($this->customerId, $query)->iterateAllElements() as $row) {
+        $request = new SearchGoogleAdsRequest([
+            'customer_id' => $this->customerId,
+            'query'       => $query,
+        ]);
+        foreach ($service->search($request)->iterateAllElements() as $row) {
             $rows[] = [
                 'id'       => $row->getCampaign()->getId(),
                 'name'     => $row->getCampaign()->getName(),

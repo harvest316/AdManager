@@ -2,8 +2,8 @@
 
 namespace AdManager;
 
-use Google\Ads\GoogleAds\Lib\V18\GoogleAdsClient;
-use Google\Ads\GoogleAds\Lib\V18\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient;
+use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\Lib\OAuth2\GoogleAdsOAuth2Credential;
 use Google\Auth\Credentials\UserRefreshCredentials;
 use Dotenv\Dotenv;

@@ -2,6 +2,8 @@
 
 namespace AdManager;
 
+use Google\Ads\GoogleAds\V20\Services\SearchGoogleAdsRequest;
+
 class Reports
 {
     private string $customerId;
@@ -145,7 +147,11 @@ class Reports
     {
         $client  = Client::get();
         $service = $client->getGoogleAdsServiceClient();
-        $stream  = $service->search($this->customerId, $gaql);
+        $request = new SearchGoogleAdsRequest([
+            'customer_id' => $this->customerId,
+            'query'       => $gaql,
+        ]);
+        $stream  = $service->search($request);
 
         $rows = [];
         foreach ($stream->iterateAllElements() as $row) {

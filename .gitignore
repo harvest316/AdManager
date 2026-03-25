@@ -2,3 +2,4 @@
 vendor/
 config/campaigns.php
 generate-design-doc.py
+.direnv/nix-profile-*.rc

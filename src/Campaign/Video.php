@@ -3,16 +3,16 @@
 namespace AdManager\Campaign;
 
 use AdManager\Client;
-use Google\Ads\GoogleAds\V18\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V18\Common\TargetCpa;
-use Google\Ads\GoogleAds\V18\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V18\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
-use Google\Ads\GoogleAds\V18\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
-use Google\Ads\GoogleAds\V18\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V18\Resources\Campaign;
-use Google\Ads\GoogleAds\V18\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V18\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V18\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;
+use Google\Ads\GoogleAds\V20\Common\TargetCpa;
+use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
+use Google\Ads\GoogleAds\V20\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
+use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V20\Resources\Campaign;
+use Google\Ads\GoogleAds\V20\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V20\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
 
 class Video
 {
