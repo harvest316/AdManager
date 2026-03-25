@@ -10,6 +10,7 @@ use Google\Ads\GoogleAds\V20\Enums\ServedAssetFieldTypeEnum\ServedAssetFieldType
 use Google\Ads\GoogleAds\V20\Resources\Ad;
 use Google\Ads\GoogleAds\V20\Resources\AdGroupAd;
 use Google\Ads\GoogleAds\V20\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V20\Services\MutateAdGroupAdsRequest;
 use Google\Ads\GoogleAds\Util\V20\ResourceNames;
 
 class ResponsiveSearch
@@ -88,7 +89,9 @@ class ResponsiveSearch
         $op->setCreate($adGroupAd);
 
         $service  = $client->getAdGroupAdServiceClient();
-        $response = $service->mutateAdGroupAds($this->customerId, [$op]);
+        $response = $service->mutateAdGroupAds(
+            MutateAdGroupAdsRequest::build($this->customerId, [$op])
+        );
 
         return $response->getResults()[0]->getResourceName();
     }

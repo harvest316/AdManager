@@ -10,6 +10,8 @@ use Google\Ads\GoogleAds\V20\Resources\AdGroupCriterion;
 use Google\Ads\GoogleAds\V20\Resources\CampaignCriterion;
 use Google\Ads\GoogleAds\V20\Services\AdGroupCriterionOperation;
 use Google\Ads\GoogleAds\V20\Services\CampaignCriterionOperation;
+use Google\Ads\GoogleAds\V20\Services\MutateAdGroupCriteriaRequest;
+use Google\Ads\GoogleAds\V20\Services\MutateCampaignCriteriaRequest;
 use Google\Ads\GoogleAds\Util\V20\ResourceNames;
 
 class Keywords
@@ -59,7 +61,9 @@ class Keywords
             $operations[] = $op;
         }
 
-        $response = $service->mutateAdGroupCriteria($this->customerId, $operations);
+        $response = $service->mutateAdGroupCriteria(
+            MutateAdGroupCriteriaRequest::build($this->customerId, $operations)
+        );
         $results  = [];
         foreach ($response->getResults() as $result) {
             $results[] = $result->getResourceName();
@@ -101,7 +105,9 @@ class Keywords
             $operations[] = $op;
         }
 
-        $response = $service->mutateCampaignCriteria($this->customerId, $operations);
+        $response = $service->mutateCampaignCriteria(
+            MutateCampaignCriteriaRequest::build($this->customerId, $operations)
+        );
         $results  = [];
         foreach ($response->getResults() as $result) {
             $results[] = $result->getResourceName();

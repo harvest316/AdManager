@@ -12,6 +12,8 @@ use Google\Ads\GoogleAds\V20\Resources\Campaign;
 use Google\Ads\GoogleAds\V20\Resources\CampaignBudget;
 use Google\Ads\GoogleAds\V20\Services\CampaignBudgetOperation;
 use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
+use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
 
 class DemandGen
 {
@@ -46,7 +48,9 @@ class DemandGen
         $budgetOp->setCreate($budget);
 
         $budgetRn = $client->getCampaignBudgetServiceClient()
-            ->mutateCampaignBudgets($this->customerId, [$budgetOp])
+            ->mutateCampaignBudgets(
+                MutateCampaignBudgetsRequest::build($this->customerId, [$budgetOp])
+            )
             ->getResults()[0]->getResourceName();
 
         $campaign = new Campaign([
@@ -70,7 +74,9 @@ class DemandGen
         $op->setCreate($campaign);
 
         return $client->getCampaignServiceClient()
-            ->mutateCampaigns($this->customerId, [$op])
+            ->mutateCampaigns(
+                MutateCampaignsRequest::build($this->customerId, [$op])
+            )
             ->getResults()[0]->getResourceName();
     }
 }

@@ -13,6 +13,8 @@ use Google\Ads\GoogleAds\V20\Resources\Campaign;
 use Google\Ads\GoogleAds\V20\Resources\CampaignBudget;
 use Google\Ads\GoogleAds\V20\Services\CampaignBudgetOperation;
 use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
+use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
 
 class Video
 {
@@ -48,11 +50,13 @@ class Video
         $budgetOp->setCreate($budget);
 
         $budgetRn = $client->getCampaignBudgetServiceClient()
-            ->mutateCampaignBudgets($this->customerId, [$budgetOp])
+            ->mutateCampaignBudgets(
+                MutateCampaignBudgetsRequest::build($this->customerId, [$budgetOp])
+            )
             ->getResults()[0]->getResourceName();
 
         $subType = ($config['subtype'] ?? 'video_action') === 'video_reach'
-            ? AdvertisingChannelSubType::VIDEO_OUTSTREAM
+            ? AdvertisingChannelSubType::VIDEO_REACH_TARGET_FREQUENCY
             : AdvertisingChannelSubType::VIDEO_ACTION;
 
         $campaign = new Campaign([
@@ -75,7 +79,9 @@ class Video
         $op->setCreate($campaign);
 
         return $client->getCampaignServiceClient()
-            ->mutateCampaigns($this->customerId, [$op])
+            ->mutateCampaigns(
+                MutateCampaignsRequest::build($this->customerId, [$op])
+            )
             ->getResults()[0]->getResourceName();
     }
 }

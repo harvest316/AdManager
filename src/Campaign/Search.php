@@ -14,6 +14,8 @@ use Google\Ads\GoogleAds\V20\Resources\CampaignBudget;
 use Google\Ads\GoogleAds\V20\Resources\Campaign\NetworkSettings;
 use Google\Ads\GoogleAds\V20\Services\CampaignBudgetOperation;
 use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
+use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
 use Google\Ads\GoogleAds\V20\Services\SearchGoogleAdsRequest;
 use Google\Ads\GoogleAds\Util\V20\ResourceNames;
 
@@ -54,7 +56,9 @@ class Search
         $budgetOp->setCreate($budget);
 
         $budgetService  = $client->getCampaignBudgetServiceClient();
-        $budgetResponse = $budgetService->mutateCampaignBudgets($this->customerId, [$budgetOp]);
+        $budgetResponse = $budgetService->mutateCampaignBudgets(
+            MutateCampaignBudgetsRequest::build($this->customerId, [$budgetOp])
+        );
         $budgetRn       = $budgetResponse->getResults()[0]->getResourceName();
 
         // 2. Create campaign
@@ -88,7 +92,9 @@ class Search
         $campaignOp->setCreate($campaign);
 
         $campaignService  = $client->getCampaignServiceClient();
-        $campaignResponse = $campaignService->mutateCampaigns($this->customerId, [$campaignOp]);
+        $campaignResponse = $campaignService->mutateCampaigns(
+            MutateCampaignsRequest::build($this->customerId, [$campaignOp])
+        );
 
         return $campaignResponse->getResults()[0]->getResourceName();
     }
