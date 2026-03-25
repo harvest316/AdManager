@@ -6,3 +6,7 @@ generate-design-doc.py
 db/*.db
 db/*.db-wal
 db/*.db-shm
+strategies/*.md
+reports/*.md
+!strategies/.gitkeep
+!reports/.gitkeep
