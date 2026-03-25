@@ -3,3 +3,6 @@ vendor/
 config/campaigns.php
 generate-design-doc.py
 .direnv/nix-profile-*.rc
+db/*.db
+db/*.db-wal
+db/*.db-shm
