@@ -1,8 +1,8 @@
 <?php
 
-namespace AdManager\Ads;
+namespace AdManager\Google\Ads;
 
-use AdManager\Client;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\V20\Common\AdTextAsset;
 use Google\Ads\GoogleAds\V20\Common\ResponsiveSearchAdInfo;
 use Google\Ads\GoogleAds\V20\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;

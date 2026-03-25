@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AdManager\Tests\Ads;
+namespace AdManager\Tests\Google\Ads;
 
-use AdManager\Ads\ResponsiveSearch;
-use AdManager\Client;
+use AdManager\Google\Ads\ResponsiveSearch;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient;
 use Google\Ads\GoogleAds\V20\Common\AdTextAsset;
 use Google\Ads\GoogleAds\V20\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;

@@ -1,10 +1,10 @@
 <?php
 
-namespace AdManager\Campaign;
+namespace AdManager\Google\Campaign;
 
-use AdManager\Client;
-use Google\Ads\GoogleAds\V20\Common\MaximizeConversionValue;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;
+use Google\Ads\GoogleAds\V20\Common\MaximizeConversionValue;
 use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V20\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
 use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
@@ -15,7 +15,7 @@ use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
 
-class PMax
+class DemandGen
 {
     private string $customerId;
 
@@ -25,26 +25,24 @@ class PMax
     }
 
     /**
-     * Create a Performance Max campaign.
+     * Create a Demand Gen campaign (YouTube, Gmail, Discover).
      *
      * @param array $config [
-     *   'name'             => 'Audit&Fix — PMax — AU',
-     *   'daily_budget_usd' => 10.00,
+     *   'name'             => 'Audit&Fix — DemandGen — AU',
+     *   'daily_budget_usd' => 5.00,
      *   'bidding'          => 'maximize_conversions' | 'maximize_conversion_value',
-     *   'target_roas'      => 3.0,  // optional, for maximize_conversion_value
+     *   'target_roas'      => 3.0,
      * ]
      */
     public function create(array $config): string
     {
         $client = Client::get();
 
-        // Budget
         $budgetMicros = (int) ($config['daily_budget_usd'] * 1_000_000);
         $budget = new CampaignBudget([
             'name'            => $config['name'] . ' Budget',
             'amount_micros'   => $budgetMicros,
             'delivery_method' => BudgetDeliveryMethod::STANDARD,
-            'explicitly_shared' => false,
         ]);
         $budgetOp = new CampaignBudgetOperation();
         $budgetOp->setCreate($budget);
@@ -55,20 +53,19 @@ class PMax
             )
             ->getResults()[0]->getResourceName();
 
-        // Campaign
         $campaign = new Campaign([
             'name'                     => $config['name'],
-            'advertising_channel_type' => AdvertisingChannelType::PERFORMANCE_MAX,
+            'advertising_channel_type' => AdvertisingChannelType::DEMAND_GEN,
             'status'                   => CampaignStatus::PAUSED,
             'campaign_budget'          => $budgetRn,
         ]);
 
         if (($config['bidding'] ?? 'maximize_conversions') === 'maximize_conversion_value') {
-            $pmax = new MaximizeConversionValue();
+            $bidding = new MaximizeConversionValue();
             if (!empty($config['target_roas'])) {
-                $pmax->setTargetRoas((float) $config['target_roas']);
+                $bidding->setTargetRoas((float) $config['target_roas']);
             }
-            $campaign->setMaximizeConversionValue($pmax);
+            $campaign->setMaximizeConversionValue($bidding);
         } else {
             $campaign->setMaximizeConversions(new MaximizeConversions());
         }

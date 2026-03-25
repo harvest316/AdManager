@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AdManager\Tests\Campaign;
+namespace AdManager\Tests\Google\Campaign;
 
-use AdManager\Campaign\Manager;
-use AdManager\Client;
+use AdManager\Google\Campaign\Manager;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient;
 use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V20\Resources\Campaign;

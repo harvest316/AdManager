@@ -1,12 +1,11 @@
 <?php
 
-namespace AdManager\Campaign;
+namespace AdManager\Google\Campaign;
 
-use AdManager\Client;
+use AdManager\Google\Client;
+use Google\Ads\GoogleAds\V20\Common\MaximizeConversionValue;
 use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V20\Common\TargetCpa;
 use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
 use Google\Ads\GoogleAds\V20\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
 use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V20\Resources\Campaign;
@@ -16,7 +15,7 @@ use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
 
-class Video
+class PMax
 {
     private string $customerId;
 
@@ -26,25 +25,26 @@ class Video
     }
 
     /**
-     * Create a Video (YouTube) campaign.
+     * Create a Performance Max campaign.
      *
      * @param array $config [
-     *   'name'             => 'Audit&Fix — Video — AU',
-     *   'daily_budget_usd' => 5.00,
-     *   'subtype'          => 'video_action' | 'video_reach',
-     *   'bidding'          => 'maximize_conversions' | 'target_cpa',
-     *   'target_cpa_usd'   => 150.00,
+     *   'name'             => 'Audit&Fix — PMax — AU',
+     *   'daily_budget_usd' => 10.00,
+     *   'bidding'          => 'maximize_conversions' | 'maximize_conversion_value',
+     *   'target_roas'      => 3.0,  // optional, for maximize_conversion_value
      * ]
      */
     public function create(array $config): string
     {
         $client = Client::get();
 
+        // Budget
         $budgetMicros = (int) ($config['daily_budget_usd'] * 1_000_000);
         $budget = new CampaignBudget([
             'name'            => $config['name'] . ' Budget',
             'amount_micros'   => $budgetMicros,
             'delivery_method' => BudgetDeliveryMethod::STANDARD,
+            'explicitly_shared' => false,
         ]);
         $budgetOp = new CampaignBudgetOperation();
         $budgetOp->setCreate($budget);
@@ -55,22 +55,20 @@ class Video
             )
             ->getResults()[0]->getResourceName();
 
-        $subType = ($config['subtype'] ?? 'video_action') === 'video_reach'
-            ? AdvertisingChannelSubType::VIDEO_REACH_TARGET_FREQUENCY
-            : AdvertisingChannelSubType::VIDEO_ACTION;
-
+        // Campaign
         $campaign = new Campaign([
-            'name'                         => $config['name'],
-            'advertising_channel_type'     => AdvertisingChannelType::VIDEO,
-            'advertising_channel_sub_type' => $subType,
-            'status'                       => CampaignStatus::PAUSED,
-            'campaign_budget'              => $budgetRn,
+            'name'                     => $config['name'],
+            'advertising_channel_type' => AdvertisingChannelType::PERFORMANCE_MAX,
+            'status'                   => CampaignStatus::PAUSED,
+            'campaign_budget'          => $budgetRn,
         ]);
 
-        if (($config['bidding'] ?? 'maximize_conversions') === 'target_cpa') {
-            $campaign->setTargetCpa(new TargetCpa([
-                'target_cpa_micros' => (int) (($config['target_cpa_usd'] ?? 150) * 1_000_000),
-            ]));
+        if (($config['bidding'] ?? 'maximize_conversions') === 'maximize_conversion_value') {
+            $pmax = new MaximizeConversionValue();
+            if (!empty($config['target_roas'])) {
+                $pmax->setTargetRoas((float) $config['target_roas']);
+            }
+            $campaign->setMaximizeConversionValue($pmax);
         } else {
             $campaign->setMaximizeConversions(new MaximizeConversions());
         }

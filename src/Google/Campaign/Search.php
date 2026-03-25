@@ -1,8 +1,8 @@
 <?php
 
-namespace AdManager\Campaign;
+namespace AdManager\Google\Campaign;
 
-use AdManager\Client;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\V20\Common\ManualCpc;
 use Google\Ads\GoogleAds\V20\Common\TargetCpa;
 use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;

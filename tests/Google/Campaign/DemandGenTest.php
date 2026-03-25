@@ -2,44 +2,46 @@
 
 declare(strict_types=1);
 
-namespace AdManager\Tests\Campaign;
+namespace AdManager\Tests\Google\Campaign;
 
-use AdManager\Campaign\Search;
-use AdManager\Client;
+use AdManager\Google\Campaign\DemandGen;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient;
-use Google\Ads\GoogleAds\V20\Common\ManualCpc;
 use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V20\Common\TargetCpa;
-use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V20\Common\MaximizeConversionValue;
 use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V20\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
+use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V20\Resources\Campaign;
 use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V20\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
+use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignsResponse;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignResult;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsResponse;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetResult;
-use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
-use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
 use Google\Ads\GoogleAds\V20\Services\Client\CampaignServiceClient;
 use Google\Ads\GoogleAds\V20\Services\Client\CampaignBudgetServiceClient;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests for Campaign\Search::create().
+ * Tests for Campaign\DemandGen::create().
  *
  * We verify:
- * - The campaign is created with PAUSED status (start paused by design)
- * - Budget micros conversion is correct
- * - Correct bidding strategy object is set for each bidding value
- * - start_date is formatted correctly (dashes stripped)
- * - Invalid bidding string falls back to maximize_conversions
+ * - Campaign is created with PAUSED status
+ * - Channel type is DEMAND_GEN
+ * - Budget is converted to micros correctly
+ * - Budget delivery method is STANDARD
+ * - Bidding defaults to maximize_conversions
+ * - maximize_conversion_value bidding with optional target_roas
+ * - Return value is the campaign resource name
  */
-class SearchTest extends TestCase
+class DemandGenTest extends TestCase
 {
-    private const FAKE_CUSTOMER_ID  = '1234567890';
-    private const FAKE_BUDGET_RN    = 'customers/1234567890/campaignBudgets/111';
-    private const FAKE_CAMPAIGN_RN  = 'customers/1234567890/campaigns/222';
+    private const FAKE_CUSTOMER_ID = '1234567890';
+    private const FAKE_BUDGET_RN   = 'customers/1234567890/campaignBudgets/111';
+    private const FAKE_CAMPAIGN_RN = 'customers/1234567890/campaigns/222';
 
     // -------------------------------------------------------------------------
     // Setup / Teardown
@@ -71,23 +73,23 @@ class SearchTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $search->create($this->baseConfig());
+        $dg = new DemandGen();
+        $dg->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertSame(CampaignStatus::PAUSED, $campaign->getStatus());
     }
 
-    public function testCreateSetsSearchChannelType(): void
+    public function testCreateSetsDemandGenChannelType(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $search->create($this->baseConfig());
+        $dg = new DemandGen();
+        $dg->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertSame(AdvertisingChannelType::SEARCH, $campaign->getAdvertisingChannelType());
+        $this->assertSame(AdvertisingChannelType::DEMAND_GEN, $campaign->getAdvertisingChannelType());
     }
 
     public function testCreateSetsCampaignName(): void
@@ -95,11 +97,11 @@ class SearchTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $search->create(['name' => 'My Search Campaign'] + $this->baseConfig());
+        $dg = new DemandGen();
+        $dg->create(['name' => 'DemandGen — AU'] + $this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertSame('My Search Campaign', $campaign->getName());
+        $this->assertSame('DemandGen — AU', $campaign->getName());
     }
 
     public function testCreateConvertsDailyBudgetToMicros(): void
@@ -107,11 +109,59 @@ class SearchTest extends TestCase
         [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $search->create(['daily_budget_usd' => 6.70] + $this->baseConfig());
+        $dg = new DemandGen();
+        $dg->create(['daily_budget_usd' => 5.00] + $this->baseConfig());
 
         $budget = $budgetCapture->op->getCreate();
-        $this->assertSame(6_700_000, $budget->getAmountMicros());
+        $this->assertSame(5_000_000, $budget->getAmountMicros());
+    }
+
+    public function testCreateConvertsFractionalBudgetToMicros(): void
+    {
+        [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $dg = new DemandGen();
+        $dg->create(['daily_budget_usd' => 8.25] + $this->baseConfig());
+
+        $budget = $budgetCapture->op->getCreate();
+        $this->assertSame(8_250_000, $budget->getAmountMicros());
+    }
+
+    public function testCreateSetsBudgetDeliveryMethodToStandard(): void
+    {
+        [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $dg = new DemandGen();
+        $dg->create($this->baseConfig());
+
+        $budget = $budgetCapture->op->getCreate();
+        $this->assertSame(BudgetDeliveryMethod::STANDARD, $budget->getDeliveryMethod());
+    }
+
+    public function testCreateSetsBudgetNameFromCampaignName(): void
+    {
+        [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $dg = new DemandGen();
+        $dg->create($this->baseConfig());
+
+        $budget = $budgetCapture->op->getCreate();
+        $this->assertSame('DemandGen — Test Budget', $budget->getName());
+    }
+
+    public function testCreateLinksBudgetResourceNameToCampaign(): void
+    {
+        [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $dg = new DemandGen();
+        $dg->create($this->baseConfig());
+
+        $campaign = $campaignCapture->op->getCreate();
+        $this->assertSame(self::FAKE_BUDGET_RN, $campaign->getCampaignBudget());
     }
 
     public function testCreateUsesMaximizeConversionsByDefault(): void
@@ -119,80 +169,86 @@ class SearchTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $search->create(['bidding' => 'maximize_conversions'] + $this->baseConfig());
+        $dg = new DemandGen();
+        $dg->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertNotNull($campaign->getMaximizeConversions());
-        $this->assertNull($campaign->getManualCpc());
-        $this->assertNull($campaign->getTargetCpa());
     }
 
-    public function testCreateUnknownBiddingStringFallsBackToMaximizeConversions(): void
+    public function testCreateUsesMaximizeConversionsWhenBiddingOmitted(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $search->create(['bidding' => 'some_unknown_strategy'] + $this->baseConfig());
+        $config = $this->baseConfig();
+        unset($config['bidding']);
+
+        $dg = new DemandGen();
+        $dg->create($config);
 
         $campaign = $campaignCapture->op->getCreate();
-        // The match() default branch sets maximize_conversions
         $this->assertNotNull($campaign->getMaximizeConversions());
     }
 
-    public function testCreateUsesManualCpcWhenSpecified(): void
+    public function testCreateUsesMaximizeConversionValueWhenSpecified(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $search->create(['bidding' => 'manual_cpc'] + $this->baseConfig());
-
-        $campaign = $campaignCapture->op->getCreate();
-        $this->assertNotNull($campaign->getManualCpc());
-        $this->assertNull($campaign->getMaximizeConversions());
-    }
-
-    public function testCreateUsesTargetCpaWhenSpecified(): void
-    {
-        [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
-        $this->injectMockClient($budgetMock, $campaignMock);
-
-        $search = new Search();
-        $search->create([
-            'bidding'        => 'target_cpa',
-            'target_cpa_usd' => 150.00,
+        $dg = new DemandGen();
+        $dg->create([
+            'bidding' => 'maximize_conversion_value',
         ] + $this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertNotNull($campaign->getTargetCpa());
-        $this->assertSame(150_000_000, $campaign->getTargetCpa()->getTargetCpaMicros());
+        $this->assertNotNull($campaign->getMaximizeConversionValue());
     }
 
-    public function testCreateStripsStartDateDashes(): void
+    public function testCreateSetsTargetRoasWhenProvided(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $search->create(['start_date' => '2026-04-01'] + $this->baseConfig());
+        $dg = new DemandGen();
+        $dg->create([
+            'bidding'     => 'maximize_conversion_value',
+            'target_roas' => 3.0,
+        ] + $this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertSame('20260401', $campaign->getStartDate());
+        $this->assertSame(3.0, $campaign->getMaximizeConversionValue()->getTargetRoas());
     }
 
-    public function testCreateDoesNotSetStartDateWhenOmitted(): void
+    public function testCreateSetsTargetRoasToArbitraryFloat(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $search->create($this->baseConfig()); // no start_date key
+        $dg = new DemandGen();
+        $dg->create([
+            'bidding'     => 'maximize_conversion_value',
+            'target_roas' => 5.5,
+        ] + $this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        // Proto default for unset string is ''
-        $this->assertSame('', $campaign->getStartDate());
+        $this->assertSame(5.5, $campaign->getMaximizeConversionValue()->getTargetRoas());
+    }
+
+    public function testCreateDoesNotSetTargetRoasWhenOmitted(): void
+    {
+        [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $dg = new DemandGen();
+        $dg->create([
+            'bidding' => 'maximize_conversion_value',
+            // target_roas omitted
+        ] + $this->baseConfig());
+
+        $campaign = $campaignCapture->op->getCreate();
+        // Proto default for float is 0.0 when not set
+        $this->assertSame(0.0, $campaign->getMaximizeConversionValue()->getTargetRoas());
     }
 
     public function testCreateReturnsResourceName(): void
@@ -200,8 +256,8 @@ class SearchTest extends TestCase
         [$budgetMock, $campaignMock] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $search = new Search();
-        $result = $search->create($this->baseConfig());
+        $dg     = new DemandGen();
+        $result = $dg->create($this->baseConfig());
 
         $this->assertSame(self::FAKE_CAMPAIGN_RN, $result);
     }
@@ -213,17 +269,15 @@ class SearchTest extends TestCase
     private function baseConfig(): array
     {
         return [
-            'name'             => 'Test Search Campaign',
+            'name'             => 'DemandGen — Test',
             'daily_budget_usd' => 5.00,
             'bidding'          => 'maximize_conversions',
-            'search_partners'  => false,
-            'display_network'  => false,
         ];
     }
 
     /**
      * Build budget and campaign service mocks.
-     * Returns [$budgetMock, $campaignMock, &$capturedCampaignOp, &$capturedBudgetOp].
+     * Returns [$budgetMock, $campaignMock, $campaignCapture, $budgetCapture].
      */
     private function buildServiceMocks(): array
     {

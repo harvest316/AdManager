@@ -1,6 +1,6 @@
 <?php
 
-namespace AdManager;
+namespace AdManager\Google;
 
 use Google\Ads\GoogleAds\V20\Common\KeywordInfo;
 use Google\Ads\GoogleAds\V20\Enums\KeywordMatchTypeEnum\KeywordMatchType;

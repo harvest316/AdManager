@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AdManager\Tests;
+namespace AdManager\Tests\Google;
 
-use AdManager\Client;
-use AdManager\Reports;
+use AdManager\Google\Client;
+use AdManager\Google\Reports;
 use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient;
 use Google\Ads\GoogleAds\V20\Services\SearchGoogleAdsRequest;
 use Google\Ads\GoogleAds\V20\Services\Client\GoogleAdsServiceClient;

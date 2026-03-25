@@ -13,8 +13,8 @@
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
-use AdManager\Client;
-use AdManager\Keywords;
+use AdManager\Google\Client;
+use AdManager\Google\Keywords;
 
 Client::boot();
 

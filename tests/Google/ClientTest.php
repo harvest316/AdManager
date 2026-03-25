@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AdManager\Tests;
+namespace AdManager\Tests\Google;
 
 use PHPUnit\Framework\TestCase;
 

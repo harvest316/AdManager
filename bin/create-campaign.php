@@ -11,12 +11,12 @@
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
-use AdManager\Client;
-use AdManager\Campaign\Search;
-use AdManager\Campaign\PMax;
-use AdManager\Campaign\Display;
-use AdManager\Campaign\Video;
-use AdManager\Campaign\DemandGen;
+use AdManager\Google\Client;
+use AdManager\Google\Campaign\Search;
+use AdManager\Google\Campaign\PMax;
+use AdManager\Google\Campaign\Display;
+use AdManager\Google\Campaign\Video;
+use AdManager\Google\Campaign\DemandGen;
 
 Client::boot();
 

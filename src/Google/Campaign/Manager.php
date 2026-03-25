@@ -1,8 +1,8 @@
 <?php
 
-namespace AdManager\Campaign;
+namespace AdManager\Google\Campaign;
 
-use AdManager\Client;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\Util\FieldMasks;
 use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V20\Resources\Campaign;

@@ -1,6 +1,6 @@
 <?php
 
-namespace AdManager;
+namespace AdManager\Google;
 
 use Google\Ads\GoogleAds\V20\Common\SitelinkAsset;
 use Google\Ads\GoogleAds\V20\Common\CalloutAsset;

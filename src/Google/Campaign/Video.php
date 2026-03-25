@@ -1,11 +1,12 @@
 <?php
 
-namespace AdManager\Campaign;
+namespace AdManager\Google\Campaign;
 
-use AdManager\Client;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;
 use Google\Ads\GoogleAds\V20\Common\TargetCpa;
 use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
 use Google\Ads\GoogleAds\V20\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
 use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V20\Resources\Campaign;
@@ -15,7 +16,7 @@ use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
 
-class Display
+class Video
 {
     private string $customerId;
 
@@ -25,11 +26,12 @@ class Display
     }
 
     /**
-     * Create a Display campaign.
+     * Create a Video (YouTube) campaign.
      *
      * @param array $config [
-     *   'name'             => 'Audit&Fix — Display — Remarketing',
+     *   'name'             => 'Audit&Fix — Video — AU',
      *   'daily_budget_usd' => 5.00,
+     *   'subtype'          => 'video_action' | 'video_reach',
      *   'bidding'          => 'maximize_conversions' | 'target_cpa',
      *   'target_cpa_usd'   => 150.00,
      * ]
@@ -53,11 +55,16 @@ class Display
             )
             ->getResults()[0]->getResourceName();
 
+        $subType = ($config['subtype'] ?? 'video_action') === 'video_reach'
+            ? AdvertisingChannelSubType::VIDEO_REACH_TARGET_FREQUENCY
+            : AdvertisingChannelSubType::VIDEO_ACTION;
+
         $campaign = new Campaign([
-            'name'                     => $config['name'],
-            'advertising_channel_type' => AdvertisingChannelType::DISPLAY,
-            'status'                   => CampaignStatus::PAUSED,
-            'campaign_budget'          => $budgetRn,
+            'name'                         => $config['name'],
+            'advertising_channel_type'     => AdvertisingChannelType::VIDEO,
+            'advertising_channel_sub_type' => $subType,
+            'status'                       => CampaignStatus::PAUSED,
+            'campaign_budget'              => $budgetRn,
         ]);
 
         if (($config['bidding'] ?? 'maximize_conversions') === 'target_cpa') {

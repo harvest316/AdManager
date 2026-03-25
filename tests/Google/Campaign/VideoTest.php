@@ -2,14 +2,15 @@
 
 declare(strict_types=1);
 
-namespace AdManager\Tests\Campaign;
+namespace AdManager\Tests\Google\Campaign;
 
-use AdManager\Campaign\PMax;
-use AdManager\Client;
+use AdManager\Google\Campaign\Video;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient;
 use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V20\Common\MaximizeConversionValue;
+use Google\Ads\GoogleAds\V20\Common\TargetCpa;
 use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
 use Google\Ads\GoogleAds\V20\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
 use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V20\Resources\Campaign;
@@ -26,19 +27,19 @@ use Google\Ads\GoogleAds\V20\Services\Client\CampaignBudgetServiceClient;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests for Campaign\PMax::create().
+ * Tests for Campaign\Video::create().
  *
  * We verify:
  * - Campaign is created with PAUSED status
- * - Channel type is PERFORMANCE_MAX
+ * - Channel type is VIDEO
+ * - Channel sub-type defaults to VIDEO_ACTION
+ * - Channel sub-type is VIDEO_OUTSTREAM when subtype=video_reach
  * - Budget is converted to micros correctly
- * - Budget delivery method is STANDARD
- * - Budget is explicitly_shared = false
  * - Bidding defaults to maximize_conversions
- * - maximize_conversion_value bidding with optional target_roas
+ * - target_cpa bidding sets correct micros
  * - Return value is the campaign resource name
  */
-class PMaxTest extends TestCase
+class VideoTest extends TestCase
 {
     private const FAKE_CUSTOMER_ID = '1234567890';
     private const FAKE_BUDGET_RN   = 'customers/1234567890/campaignBudgets/111';
@@ -74,23 +75,86 @@ class PMaxTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create($this->baseConfig());
+        $video = new Video();
+        $video->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertSame(CampaignStatus::PAUSED, $campaign->getStatus());
     }
 
-    public function testCreateSetsPerformanceMaxChannelType(): void
+    public function testCreateSetsVideoChannelType(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create($this->baseConfig());
+        $video = new Video();
+        $video->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertSame(AdvertisingChannelType::PERFORMANCE_MAX, $campaign->getAdvertisingChannelType());
+        $this->assertSame(AdvertisingChannelType::VIDEO, $campaign->getAdvertisingChannelType());
+    }
+
+    public function testCreateSetsVideoActionSubTypeByDefault(): void
+    {
+        [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $video = new Video();
+        $video->create($this->baseConfig());
+
+        $campaign = $campaignCapture->op->getCreate();
+        $this->assertSame(
+            AdvertisingChannelSubType::VIDEO_ACTION,
+            $campaign->getAdvertisingChannelSubType()
+        );
+    }
+
+    public function testCreateSetsVideoActionSubTypeWhenExplicit(): void
+    {
+        [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $video = new Video();
+        $video->create(['subtype' => 'video_action'] + $this->baseConfig());
+
+        $campaign = $campaignCapture->op->getCreate();
+        $this->assertSame(
+            AdvertisingChannelSubType::VIDEO_ACTION,
+            $campaign->getAdvertisingChannelSubType()
+        );
+    }
+
+    public function testCreateSetsVideoReachTargetFrequencySubTypeForVideoReach(): void
+    {
+        [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $video = new Video();
+        $video->create(['subtype' => 'video_reach'] + $this->baseConfig());
+
+        $campaign = $campaignCapture->op->getCreate();
+        $this->assertSame(
+            AdvertisingChannelSubType::VIDEO_REACH_TARGET_FREQUENCY,
+            $campaign->getAdvertisingChannelSubType()
+        );
+    }
+
+    public function testCreateSetsVideoActionSubTypeWhenSubtypeOmitted(): void
+    {
+        [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $config = $this->baseConfig();
+        unset($config['subtype']);
+
+        $video = new Video();
+        $video->create($config);
+
+        $campaign = $campaignCapture->op->getCreate();
+        $this->assertSame(
+            AdvertisingChannelSubType::VIDEO_ACTION,
+            $campaign->getAdvertisingChannelSubType()
+        );
     }
 
     public function testCreateSetsCampaignName(): void
@@ -98,11 +162,11 @@ class PMaxTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create(['name' => 'PMax — AU'] + $this->baseConfig());
+        $video = new Video();
+        $video->create(['name' => 'Video — YouTube AU'] + $this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertSame('PMax — AU', $campaign->getName());
+        $this->assertSame('Video — YouTube AU', $campaign->getName());
     }
 
     public function testCreateConvertsDailyBudgetToMicros(): void
@@ -110,11 +174,11 @@ class PMaxTest extends TestCase
         [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create(['daily_budget_usd' => 10.00] + $this->baseConfig());
+        $video = new Video();
+        $video->create(['daily_budget_usd' => 5.00] + $this->baseConfig());
 
         $budget = $budgetCapture->op->getCreate();
-        $this->assertSame(10_000_000, $budget->getAmountMicros());
+        $this->assertSame(5_000_000, $budget->getAmountMicros());
     }
 
     public function testCreateConvertsFractionalBudgetToMicros(): void
@@ -122,11 +186,11 @@ class PMaxTest extends TestCase
         [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create(['daily_budget_usd' => 3.75] + $this->baseConfig());
+        $video = new Video();
+        $video->create(['daily_budget_usd' => 12.50] + $this->baseConfig());
 
         $budget = $budgetCapture->op->getCreate();
-        $this->assertSame(3_750_000, $budget->getAmountMicros());
+        $this->assertSame(12_500_000, $budget->getAmountMicros());
     }
 
     public function testCreateSetsBudgetDeliveryMethodToStandard(): void
@@ -134,23 +198,11 @@ class PMaxTest extends TestCase
         [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create($this->baseConfig());
+        $video = new Video();
+        $video->create($this->baseConfig());
 
         $budget = $budgetCapture->op->getCreate();
         $this->assertSame(BudgetDeliveryMethod::STANDARD, $budget->getDeliveryMethod());
-    }
-
-    public function testCreateSetsBudgetExplicitlySharedToFalse(): void
-    {
-        [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
-        $this->injectMockClient($budgetMock, $campaignMock);
-
-        $pmax = new PMax();
-        $pmax->create($this->baseConfig());
-
-        $budget = $budgetCapture->op->getCreate();
-        $this->assertFalse($budget->getExplicitlyShared());
     }
 
     public function testCreateSetsBudgetNameFromCampaignName(): void
@@ -158,11 +210,11 @@ class PMaxTest extends TestCase
         [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create($this->baseConfig());
+        $video = new Video();
+        $video->create($this->baseConfig());
 
         $budget = $budgetCapture->op->getCreate();
-        $this->assertSame('PMax — Test Budget', $budget->getName());
+        $this->assertSame('Video — Test Budget', $budget->getName());
     }
 
     public function testCreateLinksBudgetResourceNameToCampaign(): void
@@ -170,8 +222,8 @@ class PMaxTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create($this->baseConfig());
+        $video = new Video();
+        $video->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertSame(self::FAKE_BUDGET_RN, $campaign->getCampaignBudget());
@@ -182,8 +234,8 @@ class PMaxTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create($this->baseConfig());
+        $video = new Video();
+        $video->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertNotNull($campaign->getMaximizeConversions());
@@ -197,56 +249,42 @@ class PMaxTest extends TestCase
         $config = $this->baseConfig();
         unset($config['bidding']);
 
-        $pmax = new PMax();
-        $pmax->create($config);
+        $video = new Video();
+        $video->create($config);
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertNotNull($campaign->getMaximizeConversions());
     }
 
-    public function testCreateUsesMaximizeConversionValueWhenSpecified(): void
+    public function testCreateUsesTargetCpaWhenSpecified(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create([
-            'bidding' => 'maximize_conversion_value',
+        $video = new Video();
+        $video->create([
+            'bidding'        => 'target_cpa',
+            'target_cpa_usd' => 150.00,
         ] + $this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertNotNull($campaign->getMaximizeConversionValue());
+        $this->assertNotNull($campaign->getTargetCpa());
+        $this->assertSame(150_000_000, $campaign->getTargetCpa()->getTargetCpaMicros());
     }
 
-    public function testCreateSetsTargetRoasWhenProvided(): void
+    public function testCreateTargetCpaDefaultsTo150WhenOmitted(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax = new PMax();
-        $pmax->create([
-            'bidding'     => 'maximize_conversion_value',
-            'target_roas' => 3.0,
+        $video = new Video();
+        $video->create([
+            'bidding' => 'target_cpa',
+            // target_cpa_usd omitted — defaults to 150
         ] + $this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertSame(3.0, $campaign->getMaximizeConversionValue()->getTargetRoas());
-    }
-
-    public function testCreateDoesNotSetTargetRoasWhenOmitted(): void
-    {
-        [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
-        $this->injectMockClient($budgetMock, $campaignMock);
-
-        $pmax = new PMax();
-        $pmax->create([
-            'bidding' => 'maximize_conversion_value',
-            // target_roas omitted
-        ] + $this->baseConfig());
-
-        $campaign = $campaignCapture->op->getCreate();
-        // Proto default for float is 0.0 when not set
-        $this->assertSame(0.0, $campaign->getMaximizeConversionValue()->getTargetRoas());
+        $this->assertSame(150_000_000, $campaign->getTargetCpa()->getTargetCpaMicros());
     }
 
     public function testCreateReturnsResourceName(): void
@@ -254,8 +292,8 @@ class PMaxTest extends TestCase
         [$budgetMock, $campaignMock] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $pmax   = new PMax();
-        $result = $pmax->create($this->baseConfig());
+        $video  = new Video();
+        $result = $video->create($this->baseConfig());
 
         $this->assertSame(self::FAKE_CAMPAIGN_RN, $result);
     }
@@ -267,8 +305,9 @@ class PMaxTest extends TestCase
     private function baseConfig(): array
     {
         return [
-            'name'             => 'PMax — Test',
-            'daily_budget_usd' => 10.00,
+            'name'             => 'Video — Test',
+            'daily_budget_usd' => 5.00,
+            'subtype'          => 'video_action',
             'bidding'          => 'maximize_conversions',
         ];
     }

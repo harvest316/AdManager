@@ -11,8 +11,8 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use AdManager\Client;
-use AdManager\Campaign\Manager;
+use AdManager\Google\Client;
+use AdManager\Google\Campaign\Manager;
 
 Client::boot();
 

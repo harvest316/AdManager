@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AdManager\Tests\Assets;
+namespace AdManager\Tests\Google\Assets;
 
-use AdManager\Assets;
-use AdManager\Client;
+use AdManager\Google\Assets;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient;
 use Google\Ads\GoogleAds\V20\Common\SitelinkAsset;
 use Google\Ads\GoogleAds\V20\Resources\Asset;

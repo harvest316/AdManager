@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace AdManager\Tests;
+namespace AdManager\Tests\Google;
 
-use AdManager\Keywords;
+use AdManager\Google\Keywords;
 use PHPUnit\Framework\TestCase;
 
 /**

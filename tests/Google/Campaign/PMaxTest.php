@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace AdManager\Tests\Campaign;
+namespace AdManager\Tests\Google\Campaign;
 
-use AdManager\Campaign\DemandGen;
-use AdManager\Client;
+use AdManager\Google\Campaign\PMax;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient;
 use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;
 use Google\Ads\GoogleAds\V20\Common\MaximizeConversionValue;
@@ -26,18 +26,19 @@ use Google\Ads\GoogleAds\V20\Services\Client\CampaignBudgetServiceClient;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests for Campaign\DemandGen::create().
+ * Tests for Campaign\PMax::create().
  *
  * We verify:
  * - Campaign is created with PAUSED status
- * - Channel type is DEMAND_GEN
+ * - Channel type is PERFORMANCE_MAX
  * - Budget is converted to micros correctly
  * - Budget delivery method is STANDARD
+ * - Budget is explicitly_shared = false
  * - Bidding defaults to maximize_conversions
  * - maximize_conversion_value bidding with optional target_roas
  * - Return value is the campaign resource name
  */
-class DemandGenTest extends TestCase
+class PMaxTest extends TestCase
 {
     private const FAKE_CUSTOMER_ID = '1234567890';
     private const FAKE_BUDGET_RN   = 'customers/1234567890/campaignBudgets/111';
@@ -73,23 +74,23 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create($this->baseConfig());
+        $pmax = new PMax();
+        $pmax->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertSame(CampaignStatus::PAUSED, $campaign->getStatus());
     }
 
-    public function testCreateSetsDemandGenChannelType(): void
+    public function testCreateSetsPerformanceMaxChannelType(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create($this->baseConfig());
+        $pmax = new PMax();
+        $pmax->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertSame(AdvertisingChannelType::DEMAND_GEN, $campaign->getAdvertisingChannelType());
+        $this->assertSame(AdvertisingChannelType::PERFORMANCE_MAX, $campaign->getAdvertisingChannelType());
     }
 
     public function testCreateSetsCampaignName(): void
@@ -97,11 +98,11 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create(['name' => 'DemandGen — AU'] + $this->baseConfig());
+        $pmax = new PMax();
+        $pmax->create(['name' => 'PMax — AU'] + $this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
-        $this->assertSame('DemandGen — AU', $campaign->getName());
+        $this->assertSame('PMax — AU', $campaign->getName());
     }
 
     public function testCreateConvertsDailyBudgetToMicros(): void
@@ -109,11 +110,11 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create(['daily_budget_usd' => 5.00] + $this->baseConfig());
+        $pmax = new PMax();
+        $pmax->create(['daily_budget_usd' => 10.00] + $this->baseConfig());
 
         $budget = $budgetCapture->op->getCreate();
-        $this->assertSame(5_000_000, $budget->getAmountMicros());
+        $this->assertSame(10_000_000, $budget->getAmountMicros());
     }
 
     public function testCreateConvertsFractionalBudgetToMicros(): void
@@ -121,11 +122,11 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create(['daily_budget_usd' => 8.25] + $this->baseConfig());
+        $pmax = new PMax();
+        $pmax->create(['daily_budget_usd' => 3.75] + $this->baseConfig());
 
         $budget = $budgetCapture->op->getCreate();
-        $this->assertSame(8_250_000, $budget->getAmountMicros());
+        $this->assertSame(3_750_000, $budget->getAmountMicros());
     }
 
     public function testCreateSetsBudgetDeliveryMethodToStandard(): void
@@ -133,11 +134,23 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create($this->baseConfig());
+        $pmax = new PMax();
+        $pmax->create($this->baseConfig());
 
         $budget = $budgetCapture->op->getCreate();
         $this->assertSame(BudgetDeliveryMethod::STANDARD, $budget->getDeliveryMethod());
+    }
+
+    public function testCreateSetsBudgetExplicitlySharedToFalse(): void
+    {
+        [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
+        $this->injectMockClient($budgetMock, $campaignMock);
+
+        $pmax = new PMax();
+        $pmax->create($this->baseConfig());
+
+        $budget = $budgetCapture->op->getCreate();
+        $this->assertFalse($budget->getExplicitlyShared());
     }
 
     public function testCreateSetsBudgetNameFromCampaignName(): void
@@ -145,11 +158,11 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, , $budgetCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create($this->baseConfig());
+        $pmax = new PMax();
+        $pmax->create($this->baseConfig());
 
         $budget = $budgetCapture->op->getCreate();
-        $this->assertSame('DemandGen — Test Budget', $budget->getName());
+        $this->assertSame('PMax — Test Budget', $budget->getName());
     }
 
     public function testCreateLinksBudgetResourceNameToCampaign(): void
@@ -157,8 +170,8 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create($this->baseConfig());
+        $pmax = new PMax();
+        $pmax->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertSame(self::FAKE_BUDGET_RN, $campaign->getCampaignBudget());
@@ -169,8 +182,8 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create($this->baseConfig());
+        $pmax = new PMax();
+        $pmax->create($this->baseConfig());
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertNotNull($campaign->getMaximizeConversions());
@@ -184,8 +197,8 @@ class DemandGenTest extends TestCase
         $config = $this->baseConfig();
         unset($config['bidding']);
 
-        $dg = new DemandGen();
-        $dg->create($config);
+        $pmax = new PMax();
+        $pmax->create($config);
 
         $campaign = $campaignCapture->op->getCreate();
         $this->assertNotNull($campaign->getMaximizeConversions());
@@ -196,8 +209,8 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create([
+        $pmax = new PMax();
+        $pmax->create([
             'bidding' => 'maximize_conversion_value',
         ] + $this->baseConfig());
 
@@ -210,8 +223,8 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create([
+        $pmax = new PMax();
+        $pmax->create([
             'bidding'     => 'maximize_conversion_value',
             'target_roas' => 3.0,
         ] + $this->baseConfig());
@@ -220,28 +233,13 @@ class DemandGenTest extends TestCase
         $this->assertSame(3.0, $campaign->getMaximizeConversionValue()->getTargetRoas());
     }
 
-    public function testCreateSetsTargetRoasToArbitraryFloat(): void
-    {
-        [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
-        $this->injectMockClient($budgetMock, $campaignMock);
-
-        $dg = new DemandGen();
-        $dg->create([
-            'bidding'     => 'maximize_conversion_value',
-            'target_roas' => 5.5,
-        ] + $this->baseConfig());
-
-        $campaign = $campaignCapture->op->getCreate();
-        $this->assertSame(5.5, $campaign->getMaximizeConversionValue()->getTargetRoas());
-    }
-
     public function testCreateDoesNotSetTargetRoasWhenOmitted(): void
     {
         [$budgetMock, $campaignMock, $campaignCapture] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg = new DemandGen();
-        $dg->create([
+        $pmax = new PMax();
+        $pmax->create([
             'bidding' => 'maximize_conversion_value',
             // target_roas omitted
         ] + $this->baseConfig());
@@ -256,8 +254,8 @@ class DemandGenTest extends TestCase
         [$budgetMock, $campaignMock] = $this->buildServiceMocks();
         $this->injectMockClient($budgetMock, $campaignMock);
 
-        $dg     = new DemandGen();
-        $result = $dg->create($this->baseConfig());
+        $pmax   = new PMax();
+        $result = $pmax->create($this->baseConfig());
 
         $this->assertSame(self::FAKE_CAMPAIGN_RN, $result);
     }
@@ -269,8 +267,8 @@ class DemandGenTest extends TestCase
     private function baseConfig(): array
     {
         return [
-            'name'             => 'DemandGen — Test',
-            'daily_budget_usd' => 5.00,
+            'name'             => 'PMax — Test',
+            'daily_budget_usd' => 10.00,
             'bidding'          => 'maximize_conversions',
         ];
     }

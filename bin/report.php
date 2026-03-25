@@ -14,7 +14,7 @@
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
-use AdManager\Reports;
+use AdManager\Google\Reports;
 
 $type      = $argv[1] ?? 'campaigns';
 $dateRange = $argv[2] ?? 'LAST_7_DAYS';

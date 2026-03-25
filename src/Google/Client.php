@@ -1,6 +1,6 @@
 <?php
 
-namespace AdManager;
+namespace AdManager\Google;
 
 use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClient;
 use Google\Ads\GoogleAds\Lib\V20\GoogleAdsClientBuilder;

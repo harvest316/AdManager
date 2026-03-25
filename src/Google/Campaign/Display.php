@@ -1,10 +1,10 @@
 <?php
 
-namespace AdManager\Campaign;
+namespace AdManager\Google\Campaign;
 
-use AdManager\Client;
+use AdManager\Google\Client;
 use Google\Ads\GoogleAds\V20\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V20\Common\MaximizeConversionValue;
+use Google\Ads\GoogleAds\V20\Common\TargetCpa;
 use Google\Ads\GoogleAds\V20\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V20\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
 use Google\Ads\GoogleAds\V20\Enums\CampaignStatusEnum\CampaignStatus;
@@ -15,7 +15,7 @@ use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
 
-class DemandGen
+class Display
 {
     private string $customerId;
 
@@ -25,13 +25,13 @@ class DemandGen
     }
 
     /**
-     * Create a Demand Gen campaign (YouTube, Gmail, Discover).
+     * Create a Display campaign.
      *
      * @param array $config [
-     *   'name'             => 'Audit&Fix — DemandGen — AU',
+     *   'name'             => 'Audit&Fix — Display — Remarketing',
      *   'daily_budget_usd' => 5.00,
-     *   'bidding'          => 'maximize_conversions' | 'maximize_conversion_value',
-     *   'target_roas'      => 3.0,
+     *   'bidding'          => 'maximize_conversions' | 'target_cpa',
+     *   'target_cpa_usd'   => 150.00,
      * ]
      */
     public function create(array $config): string
@@ -55,17 +55,15 @@ class DemandGen
 
         $campaign = new Campaign([
             'name'                     => $config['name'],
-            'advertising_channel_type' => AdvertisingChannelType::DEMAND_GEN,
+            'advertising_channel_type' => AdvertisingChannelType::DISPLAY,
             'status'                   => CampaignStatus::PAUSED,
             'campaign_budget'          => $budgetRn,
         ]);
 
-        if (($config['bidding'] ?? 'maximize_conversions') === 'maximize_conversion_value') {
-            $bidding = new MaximizeConversionValue();
-            if (!empty($config['target_roas'])) {
-                $bidding->setTargetRoas((float) $config['target_roas']);
-            }
-            $campaign->setMaximizeConversionValue($bidding);
+        if (($config['bidding'] ?? 'maximize_conversions') === 'target_cpa') {
+            $campaign->setTargetCpa(new TargetCpa([
+                'target_cpa_micros' => (int) (($config['target_cpa_usd'] ?? 150) * 1_000_000),
+            ]));
         } else {
             $campaign->setMaximizeConversions(new MaximizeConversions());
         }
