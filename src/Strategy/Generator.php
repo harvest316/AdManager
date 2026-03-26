@@ -15,11 +15,11 @@ class Generator
     }
 
     /**
-     * Generate a strategy by shelling out to Claude CLI.
+     * Generate a strategy by crawling the site and shelling out to Claude CLI.
      *
      * @return int The strategy ID
      */
-    public function generate(int $projectId, string $platform = 'all', string $campaignType = 'full', array $context = []): int
+    public function generate(int $projectId, array $context = []): int
     {
         $db = DB::get();
 
@@ -32,19 +32,19 @@ class Generator
             throw new RuntimeException("Project #{$projectId} not found.");
         }
 
-        $prompt = $this->buildPrompt($project, $platform, $campaignType, $context);
+        // Auto-crawl the site if we have a URL and no context override
+        if (!empty($project['website_url']) && empty($context['site_summary'])) {
+            echo "  Crawling {$project['website_url']}...\n";
+            $context['site_summary'] = $this->crawlSite($project['website_url']);
+        }
+
+        $prompt = $this->buildPrompt($project, $context);
         $strategy = $this->runClaude($prompt);
 
-        // Generate a descriptive name
-        $name = sprintf(
-            '%s — %s %s',
-            $project['display_name'] ?: $project['name'],
-            ucfirst($platform),
-            ucfirst($campaignType)
-        );
+        $name = sprintf('%s — Full Strategy', $project['display_name'] ?: $project['name']);
 
         // Save to database
-        $id = $this->store->save($projectId, $name, $platform, $campaignType, $strategy);
+        $id = $this->store->save($projectId, $name, 'all', 'full', $strategy);
 
         // Save to filesystem
         $this->saveToFile($project['name'], $strategy);
@@ -53,9 +53,38 @@ class Generator
     }
 
     /**
+     * Generate from just a domain — auto-creates project if needed.
+     */
+    public function generateFromDomain(string $domain): int
+    {
+        $db = DB::get();
+
+        // Normalise domain
+        $domain = preg_replace('#^https?://#', '', rtrim($domain, '/'));
+        $url = "https://{$domain}";
+        $slug = preg_replace('/[^a-z0-9]+/', '-', strtolower(explode('.', $domain)[0]));
+
+        // Find or create project
+        $stmt = $db->prepare('SELECT * FROM projects WHERE website_url = ? OR name = ?');
+        $stmt->execute([$url, $slug]);
+        $project = $stmt->fetch();
+
+        if (!$project) {
+            echo "  Creating project '{$slug}' for {$url}...\n";
+            $db->prepare('INSERT INTO projects (name, website_url) VALUES (?, ?)')
+               ->execute([$slug, $url]);
+            $projectId = (int) $db->lastInsertId();
+        } else {
+            $projectId = (int) $project['id'];
+        }
+
+        return $this->generate($projectId);
+    }
+
+    /**
      * Build the prompt from template + project data.
      */
-    public function buildPrompt(array $project, string $platform, string $campaignType, array $context): string
+    public function buildPrompt(array $project, array $context): string
     {
         $templatePath = dirname(__DIR__, 2) . '/prompts/STRATEGY.md';
 
@@ -101,11 +130,18 @@ class Generator
             }
         }
 
-        // Build context string
+        // Build context string — site_summary goes first if present
         $contextText = '';
-        if (!empty($context)) {
-            $contextText = "## Additional Context\n";
-            foreach ($context as $key => $value) {
+        if (!empty($context['site_summary'])) {
+            $contextText .= "## Site Analysis (auto-crawled)\n\n{$context['site_summary']}\n\n";
+        }
+        $extraContext = array_filter($context, fn($k) => !in_array($k, [
+            'site_summary', 'account_maturity', 'pricing_model',
+            'primary_conversion', 'secondary_conversions', 'target_markets',
+        ]), ARRAY_FILTER_USE_KEY);
+        if (!empty($extraContext)) {
+            $contextText .= "## Additional Context\n";
+            foreach ($extraContext as $key => $value) {
                 if (is_int($key)) {
                     $contextText .= "- {$value}\n";
                 } else {
@@ -133,6 +169,105 @@ class Generator
     }
 
     /**
+     * Crawl a site's sitemap and key pages to understand the business.
+     */
+    private function crawlSite(string $url): string
+    {
+        $domain = parse_url($url, PHP_URL_HOST) ?: $url;
+        $baseUrl = rtrim($url, '/');
+        $summary = [];
+
+        // 1. Try sitemap.xml
+        $sitemapUrls = [];
+        $sitemapXml = $this->httpGet("{$baseUrl}/sitemap.xml");
+        if ($sitemapXml && stripos($sitemapXml, '<urlset') !== false) {
+            preg_match_all('#<loc>([^<]+)</loc>#i', $sitemapXml, $matches);
+            $sitemapUrls = $matches[1] ?? [];
+            $summary[] = "**Sitemap:** " . count($sitemapUrls) . " URLs found";
+            // List up to 30 URLs for context
+            $displayUrls = array_slice($sitemapUrls, 0, 30);
+            $summary[] = "**Pages:**\n" . implode("\n", array_map(fn($u) => "- {$u}", $displayUrls));
+            if (count($sitemapUrls) > 30) {
+                $summary[] = "... and " . (count($sitemapUrls) - 30) . " more";
+            }
+        }
+
+        // 2. Crawl homepage
+        $homepage = $this->httpGet($baseUrl);
+        if ($homepage) {
+            // Extract title
+            if (preg_match('#<title[^>]*>([^<]+)</title>#i', $homepage, $m)) {
+                $summary[] = "**Title:** " . trim($m[1]);
+            }
+            // Extract meta description
+            if (preg_match('#<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']#i', $homepage, $m)) {
+                $summary[] = "**Meta Description:** " . trim($m[1]);
+            }
+            // Extract headings
+            preg_match_all('#<h[1-3][^>]*>([^<]+)</h[1-3]>#i', $homepage, $headings);
+            if (!empty($headings[1])) {
+                $hdgs = array_slice(array_map('trim', $headings[1]), 0, 10);
+                $summary[] = "**Key Headings:** " . implode(' | ', $hdgs);
+            }
+            // Extract visible text (rough — strip tags, collapse whitespace)
+            $text = strip_tags($homepage);
+            $text = preg_replace('/\s+/', ' ', $text);
+            $text = trim(mb_substr($text, 0, 2000));
+            if ($text) {
+                $summary[] = "**Homepage Text (first 2000 chars):**\n{$text}";
+            }
+        }
+
+        // 3. Crawl a few key pages if sitemap found them
+        $keyPages = [];
+        foreach ($sitemapUrls as $sUrl) {
+            $path = parse_url($sUrl, PHP_URL_PATH) ?? '';
+            if (preg_match('#/(pricing|about|features|plans|products|services|how-it-works)#i', $path)) {
+                $keyPages[] = $sUrl;
+            }
+            if (count($keyPages) >= 3) break;
+        }
+
+        foreach ($keyPages as $pageUrl) {
+            $pageHtml = $this->httpGet($pageUrl);
+            if ($pageHtml) {
+                $path = parse_url($pageUrl, PHP_URL_PATH);
+                if (preg_match('#<title[^>]*>([^<]+)</title>#i', $pageHtml, $m)) {
+                    $summary[] = "\n**Page {$path} title:** " . trim($m[1]);
+                }
+                $text = strip_tags($pageHtml);
+                $text = preg_replace('/\s+/', ' ', $text);
+                $text = trim(mb_substr($text, 0, 1000));
+                if ($text) {
+                    $summary[] = "**{$path} text (first 1000 chars):**\n{$text}";
+                }
+            }
+        }
+
+        return implode("\n\n", $summary) ?: "Could not crawl {$url} — site may be down or blocking bots.";
+    }
+
+    /**
+     * Simple HTTP GET with curl. Returns body or empty string on failure.
+     */
+    private function httpGet(string $url): string
+    {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_USERAGENT      => 'AdManager/1.0 (strategy-crawler)',
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $body = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return ($code >= 200 && $code < 400) ? ($body ?: '') : '';
+    }
+
+    /**
      * Execute Claude CLI and return stdout.
      *
      * @throws RuntimeException on non-zero exit or timeout
@@ -147,7 +282,7 @@ class Generator
             2 => ['pipe', 'w'],  // stderr
         ];
 
-        $cmd = "claude -p {$escapedPrompt} --output-format text";
+        $cmd = "claude -p {$escapedPrompt} --output-format text --model opus --verbose";
         $process = proc_open($cmd, $descriptors, $pipes);
 
         if (!is_resource($process)) {
@@ -163,7 +298,7 @@ class Generator
         $stdout = '';
         $stderr = '';
         $startTime = time();
-        $timeout = 120; // seconds
+        $timeout = 300; // 5 minutes — Opus with thinking needs longer
 
         while (true) {
             $status = proc_get_status($process);

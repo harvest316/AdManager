@@ -5,7 +5,9 @@
  * Strategy CLI — generate, list, show, delete advertising strategies.
  *
  * Usage:
- *   php bin/strategy.php generate --project <name> --platform google|meta --type search|display|video|pmax [--context "additional context"]
+ *   php bin/strategy.php generate colormora.com                    # Just a domain — auto-crawls
+ *   php bin/strategy.php generate --project <name>                 # Use existing project
+ *   php bin/strategy.php generate colormora.com --budget 30        # Override daily budget
  *   php bin/strategy.php list --project <name>
  *   php bin/strategy.php show <id>
  *   php bin/strategy.php delete <id>
@@ -54,13 +56,17 @@ function usage(): void
 AdManager Strategy CLI
 
 Usage:
-  {$script} generate --project <name> --platform google|meta --type search|display|video|pmax [--context "additional context"]
-  {$script} list --project <name>
-  {$script} show <id>
-  {$script} delete <id>
+  {$script} generate <domain>                       Generate strategy from just a domain (auto-crawls)
+  {$script} generate --project <name>               Generate for existing project
+  {$script} generate <domain> --budget <daily_aud>  Override daily budget
+  {$script} list --project <name>                   List strategies for a project
+  {$script} show <id>                               Show a strategy
+  {$script} delete <id>                             Delete a strategy
 
-Platforms: google, meta
-Campaign types: search, display, video, pmax, shopping, feed, stories, reels
+The generate command will:
+  1. Crawl the sitemap and key pages to understand the business
+  2. Auto-detect pricing model, target audience, and conversion events
+  3. Generate a comprehensive paid media strategy using Claude Opus
 
 USAGE;
     exit(1);
@@ -85,42 +91,54 @@ function resolveProject(string $name): array
 
 function cmdGenerate(array $pos, array $named): void
 {
-    $projectName = $named['project'] ?? null;
-    $platform = $named['platform'] ?? null;
-    $type = $named['type'] ?? null;
-    $contextStr = $named['context'] ?? null;
+    $generator = new Generator();
+    $context = [];
 
-    if (!$projectName || !$platform || !$type) {
-        echo "Error: --project, --platform, and --type are all required.\n";
+    // Pass through any named context overrides
+    foreach (['account_maturity', 'pricing_model', 'primary_conversion',
+              'secondary_conversions', 'target_markets'] as $key) {
+        if (isset($named[$key])) {
+            $context[$key] = $named[$key];
+        }
+    }
+
+    // Budget override
+    if (isset($named['budget'])) {
+        $context['budget_override'] = $named['budget'];
+    }
+
+    // Determine: domain or --project
+    if (!empty($pos[0]) && str_contains($pos[0], '.')) {
+        // Domain mode
+        $domain = $pos[0];
+        echo "Generating strategy for {$domain}...\n";
+        echo "(Crawling site, then generating with Claude Opus — may take 3-5 minutes)\n\n";
+
+        try {
+            $id = $generator->generateFromDomain($domain);
+            echo "\nStrategy saved with ID: {$id}\n";
+            echo "Run 'php bin/strategy.php show {$id}' to view.\n";
+        } catch (\Exception $e) {
+            echo "Error: {$e->getMessage()}\n";
+            exit(1);
+        }
+    } elseif (isset($named['project'])) {
+        // Project mode
+        $project = resolveProject($named['project']);
+        echo "Generating strategy for {$project['display_name']}...\n";
+        echo "(Crawling site, then generating with Claude Opus — may take 3-5 minutes)\n\n";
+
+        try {
+            $id = $generator->generate($project['id'], $context);
+            echo "\nStrategy saved with ID: {$id}\n";
+            echo "Run 'php bin/strategy.php show {$id}' to view.\n";
+        } catch (\Exception $e) {
+            echo "Error: {$e->getMessage()}\n";
+            exit(1);
+        }
+    } else {
+        echo "Error: provide a domain or --project name.\n";
         usage();
-    }
-
-    $validPlatforms = ['google', 'meta'];
-    if (!in_array($platform, $validPlatforms)) {
-        echo "Error: platform must be one of: " . implode(', ', $validPlatforms) . "\n";
-        exit(1);
-    }
-
-    $validTypes = ['search', 'display', 'video', 'pmax', 'shopping', 'feed', 'stories', 'reels'];
-    if (!in_array($type, $validTypes)) {
-        echo "Error: type must be one of: " . implode(', ', $validTypes) . "\n";
-        exit(1);
-    }
-
-    $project = resolveProject($projectName);
-    $context = $contextStr ? [$contextStr] : [];
-
-    echo "Generating strategy for {$project['display_name']} — {$platform} {$type}...\n";
-    echo "(This may take up to 2 minutes)\n\n";
-
-    try {
-        $generator = new Generator();
-        $id = $generator->generate($project['id'], $platform, $type, $context);
-        echo "Strategy saved with ID: {$id}\n";
-        echo "Run 'php bin/strategy.php show {$id}' to view.\n";
-    } catch (\Exception $e) {
-        echo "Error: {$e->getMessage()}\n";
-        exit(1);
     }
 }
 
@@ -141,16 +159,14 @@ function cmdList(array $pos, array $named): void
         return;
     }
 
-    printf("%-4s %-40s %-10s %-12s %-8s %s\n", 'ID', 'Name', 'Platform', 'Type', 'Model', 'Created');
-    echo str_repeat('-', 100) . "\n";
+    printf("%-4s %-50s %-8s %s\n", 'ID', 'Name', 'Model', 'Created');
+    echo str_repeat('-', 90) . "\n";
 
     foreach ($strategies as $s) {
         printf(
-            "%-4d %-40s %-10s %-12s %-8s %s\n",
+            "%-4d %-50s %-8s %s\n",
             $s['id'],
-            mb_substr($s['name'], 0, 40),
-            $s['platform'] ?? '-',
-            $s['campaign_type'] ?? '-',
+            mb_substr($s['name'], 0, 50),
             $s['model'] ?? '-',
             $s['created_at']
         );
