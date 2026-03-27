@@ -37,7 +37,7 @@ class KeywordMiner
              JOIN campaigns c ON c.id = p.campaign_id
              WHERE c.project_id = ?
              GROUP BY p.ad_group_id
-             HAVING SUM(p.impressions) >= ?'
+             HAVING SUM(p.impressions) - ? >= 0'
         );
         $stmt->execute([$projectId, $this->minImpressions]);
         $termData = $stmt->fetchAll();
