@@ -7,6 +7,7 @@ Generate a comprehensive paid media strategy for the following:
 **Goals:** {{GOALS}}
 **Account Maturity:** {{ACCOUNT_MATURITY}} (new account with zero history / existing account with data / scaling account)
 **Pricing Model:** {{PRICING_MODEL}} (e.g. one-time purchase, subscription, credit-based, lead gen, etc.)
+**Primary Persona:** {{PRIMARY_PERSONA}} (e.g. "mothers aged 25-42 with young children", "small business owners", "Etsy sellers")
 **Primary Conversion Event:** {{PRIMARY_CONVERSION}} (e.g. purchase, lead form, sign_up, phone call)
 **Secondary Conversion Events:** {{SECONDARY_CONVERSIONS}} (e.g. add_to_cart, page_view on pricing, demo request)
 **Target Markets:** {{TARGET_MARKETS}} (countries/regions and languages)
@@ -94,6 +95,17 @@ Define a naming schema that scales across campaigns, ad groups, and labels. Form
 ```
 Provide 3-5 examples using the actual product name.
 
+### Budget-tier consolidation rules
+
+If monthly budget is below $500, consolidate aggressively:
+- Maximum 3 Google campaigns (Brand Search + 1 Non-Brand Search + 1 PMax or Display Retargeting)
+- Maximum 2 Meta campaigns (1 Prospecting CBO + 1 Retargeting)
+- Any campaign receiving less than $3/day is below the viable threshold — do not launch it until budget increases
+
+If the product has recently been rebranded, include legacy brand terms in the Brand campaign for transition coverage.
+
+For Meta, use Campaign Budget Optimization (CBO) when daily budget per campaign is below $15/day. CBO lets Facebook distribute between ad sets automatically, which is more efficient at low budgets than fixed ad-set budgets.
+
 ### Campaign structure
 
 Design the full campaign architecture. For each campaign, provide:
@@ -155,7 +167,7 @@ Explain why certain platforms are prioritised at launch and when to add others. 
 
 ---
 
-## 4. Audience Targeting (Meta)
+## 4. Campaign Architecture (Meta/Instagram)
 
 ### Account-level audience setup before any Meta spend
 
@@ -390,6 +402,10 @@ Calculate the expected first-purchase ROAS based on the pricing model and expect
 4. Add Microsoft Ads (import from Google)
 5. Add [platform-specific expansion]
 6. Tighten tCPA in 5% increments
+
+### What NOT to launch yet
+
+For each gate, explicitly state which campaigns, platforms, and audience segments should NOT be launched yet and why. This is as important as what to launch — premature expansion on a small budget dilutes spend below viable thresholds.
 
 ### Signals that mean do not scale yet
 

@@ -158,6 +158,7 @@ class Generator
             '{{GOALS}}'                  => trim($goalsText),
             '{{ACCOUNT_MATURITY}}'       => $context['account_maturity'] ?? 'new account with zero history',
             '{{PRICING_MODEL}}'          => $context['pricing_model'] ?? 'Not specified',
+            '{{PRIMARY_PERSONA}}'        => $context['primary_persona'] ?? 'Not specified — infer from site analysis',
             '{{PRIMARY_CONVERSION}}'     => $context['primary_conversion'] ?? 'purchase',
             '{{SECONDARY_CONVERSIONS}}'  => $context['secondary_conversions'] ?? 'sign_up, add_to_cart',
             '{{TARGET_MARKETS}}'         => $context['target_markets'] ?? 'Australia (English)',
