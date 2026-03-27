@@ -282,7 +282,8 @@ class Generator
             2 => ['pipe', 'w'],  // stderr
         ];
 
-        $cmd = "claude -p {$escapedPrompt} --output-format text --model opus --verbose";
+        $claudeBin = getenv('CLAUDE_BIN') ?: '/home/jason/.local/bin/claude';
+        $cmd = "{$claudeBin} -p {$escapedPrompt} --output-format text --model opus --verbose";
         $process = proc_open($cmd, $descriptors, $pipes);
 
         if (!is_resource($process)) {

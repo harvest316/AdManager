@@ -10,3 +10,5 @@ strategies/*.md
 reports/*.md
 !strategies/.gitkeep
 !reports/.gitkeep
+.direnv/
+.phpunit.result.cache
