@@ -8,14 +8,16 @@ class VideoGen
     private const POLL_INTERVAL = 5;   // seconds
     private const MAX_WAIT      = 300; // 5 minutes
 
-    private string $apiKey;
+    private string $accessKey;
+    private string $secretKey;
     private string $assetsDir;
 
     public function __construct()
     {
-        $this->apiKey = $_ENV['KLING_API_KEY'] ?? getenv('KLING_API_KEY') ?: '';
-        if (!$this->apiKey) {
-            throw new \RuntimeException('KLING_API_KEY not set');
+        $this->accessKey = $_ENV['KLING_ACCESS_KEY'] ?? getenv('KLING_ACCESS_KEY') ?: '';
+        $this->secretKey = $_ENV['KLING_SECRET_KEY'] ?? getenv('KLING_SECRET_KEY') ?: '';
+        if (!$this->accessKey || !$this->secretKey) {
+            throw new \RuntimeException('KLING_ACCESS_KEY and KLING_SECRET_KEY must be set');
         }
 
         $this->assetsDir = dirname(__DIR__, 2) . '/assets/videos';
@@ -130,7 +132,7 @@ class VideoGen
             CURLOPT_POSTFIELDS     => json_encode($payload),
             CURLOPT_HTTPHEADER     => [
                 'Content-Type: application/json',
-                'Authorization: Bearer ' . $this->apiKey,
+                'Authorization: Bearer ' . $this->generateJwt(),
             ],
             CURLOPT_TIMEOUT => 30,
         ]);
@@ -150,7 +152,7 @@ class VideoGen
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => [
                 'Content-Type: application/json',
-                'Authorization: Bearer ' . $this->apiKey,
+                'Authorization: Bearer ' . $this->generateJwt(),
             ],
             CURLOPT_TIMEOUT => 30,
         ]);
@@ -204,5 +206,26 @@ class VideoGen
         }
 
         return $filePath;
+    }
+
+    /**
+     * Generate a short-lived JWT for Kling API auth (HS256).
+     */
+    private function generateJwt(): string
+    {
+        $header = ['alg' => 'HS256', 'typ' => 'JWT'];
+        $now = time();
+        $payload = [
+            'iss' => $this->accessKey,
+            'exp' => $now + 1800, // 30 min
+            'nbf' => $now - 5,
+            'iat' => $now,
+        ];
+
+        $b64 = fn(array $d) => rtrim(strtr(base64_encode(json_encode($d)), '+/', '-_'), '=');
+        $segments = $b64($header) . '.' . $b64($payload);
+        $sig = rtrim(strtr(base64_encode(hash_hmac('sha256', $segments, $this->secretKey, true)), '+/', '-_'), '=');
+
+        return $segments . '.' . $sig;
     }
 }
