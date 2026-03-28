@@ -5,7 +5,7 @@ namespace AdManager\Creative;
 class ImageGen
 {
     private const MODELS = [
-        'draft'      => 'google/gemini-2.0-flash-exp:free',
+        'draft'      => 'google/gemini-2.5-flash-image',
         'production' => 'black-forest-labs/flux-1.1-pro',
     ];
 
@@ -19,7 +19,7 @@ class ImageGen
 
     public function __construct()
     {
-        $this->apiKey = getenv('OPENROUTER_API_KEY') ?: '';
+        $this->apiKey = $_ENV['OPENROUTER_API_KEY'] ?? getenv('OPENROUTER_API_KEY') ?: '';
         if (!$this->apiKey) {
             throw new \RuntimeException('OPENROUTER_API_KEY not set');
         }

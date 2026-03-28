@@ -13,7 +13,7 @@ class VideoGen
 
     public function __construct()
     {
-        $this->apiKey = getenv('KLING_API_KEY') ?: '';
+        $this->apiKey = $_ENV['KLING_API_KEY'] ?? getenv('KLING_API_KEY') ?: '';
         if (!$this->apiKey) {
             throw new \RuntimeException('KLING_API_KEY not set');
         }
