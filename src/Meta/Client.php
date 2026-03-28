@@ -144,7 +144,9 @@ class Client
         if (isset($decoded['error'])) {
             $msg = $decoded['error']['message'] ?? json_encode($decoded['error']);
             $code = $decoded['error']['code'] ?? 0;
-            throw new RuntimeException("Meta API error ({$code}): {$msg}");
+            $detail = $decoded['error']['error_user_msg'] ?? ($decoded['error']['error_user_title'] ?? '');
+            $sub = isset($decoded['error']['error_subcode']) ? " [sub:{$decoded['error']['error_subcode']}]" : '';
+            throw new RuntimeException("Meta API error ({$code}){$sub}: {$msg}" . ($detail ? " — {$detail}" : ''));
         }
 
         return $decoded;

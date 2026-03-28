@@ -48,12 +48,16 @@ class AdSet
         $data = [
             'campaign_id'       => $campaignId,
             'name'              => $config['name'],
-            'daily_budget'      => $config['daily_budget'],
             'optimization_goal' => $config['optimization_goal'],
             'billing_event'     => $config['billing_event'] ?? 'IMPRESSIONS',
             'targeting'         => json_encode($config['targeting']),
             'status'            => $config['status'] ?? 'PAUSED',
         ];
+
+        // daily_budget is optional for CBO campaigns (budget set at campaign level)
+        if (!empty($config['daily_budget'])) {
+            $data['daily_budget'] = $config['daily_budget'];
+        }
 
         if (!empty($config['start_time'])) {
             $data['start_time'] = $config['start_time'];
