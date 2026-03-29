@@ -8,7 +8,11 @@ db/*.db-wal
 db/*.db-shm
 strategies/*.md
 reports/*.md
+assets/images/*
+assets/videos/*
 !strategies/.gitkeep
 !reports/.gitkeep
+!assets/images/.gitkeep
+!assets/videos/.gitkeep
 .direnv/
 .phpunit.result.cache
