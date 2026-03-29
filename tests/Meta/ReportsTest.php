@@ -102,6 +102,24 @@ class ReportsTest extends TestCase
         $this->assertStringContainsString('cost_per_action_type', $fields);
     }
 
+    public function testCampaignInsightsDefaultFieldsIncludeFrequencyAndReach(): void
+    {
+        $capture = new \stdClass();
+        $capture->params = null;
+
+        $this->injectMockClient($this->buildCapturingGetApiMock($capture));
+
+        $reports = new Reports();
+        $reports->campaignInsights(self::FAKE_CAMPAIGN_ID);
+
+        $fields = $capture->params['fields'];
+        $this->assertStringContainsString('frequency', $fields);
+        $this->assertStringContainsString('reach', $fields);
+        $this->assertStringContainsString('unique_clicks', $fields);
+        $this->assertStringContainsString('unique_ctr', $fields);
+        $this->assertStringContainsString('cost_per_unique_click', $fields);
+    }
+
     public function testCampaignInsightsCustomFieldsOverrideDefaults(): void
     {
         $capture = new \stdClass();

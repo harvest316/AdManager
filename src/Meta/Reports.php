@@ -23,6 +23,11 @@ class Reports
         'spend',
         'actions',
         'cost_per_action_type',
+        'frequency',
+        'reach',
+        'unique_clicks',
+        'unique_ctr',
+        'cost_per_unique_click',
     ];
 
     public function __construct()

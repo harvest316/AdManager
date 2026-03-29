@@ -132,4 +132,77 @@ class AdSet
             'fields' => $fields,
         ]);
     }
+
+    /**
+     * Update an ad set's fields.
+     *
+     * Common uses: change status, update budget, swap targeting, adjust schedule.
+     *
+     * @param string $adSetId Ad set ID
+     * @param array  $data    Fields to update (e.g. ['daily_budget' => 2000, 'status' => 'ACTIVE'])
+     */
+    public function update(string $adSetId, array $data): void
+    {
+        $this->client->post($adSetId, $data);
+    }
+
+    /**
+     * Build a placement targeting spec for common Meta placements.
+     *
+     * Defaults to Facebook Feed + Instagram Feed + Instagram Stories + Instagram Reels.
+     * Audience Network is excluded by default; Messenger is excluded by default.
+     *
+     * @param array $options [
+     *   'exclude_audience_network' => true,   // default: true
+     *   'include_messenger'        => false,  // default: false
+     * ]
+     * @return array Placement spec ready to merge into a targeting array
+     */
+    public static function buildPlacements(array $options = []): array
+    {
+        $excludeAudienceNetwork = $options['exclude_audience_network'] ?? true;
+        $includeMessenger       = $options['include_messenger'] ?? false;
+
+        $publisherPlatforms = ['facebook', 'instagram'];
+        if (!$excludeAudienceNetwork) {
+            $publisherPlatforms[] = 'audience_network';
+        }
+        if ($includeMessenger) {
+            $publisherPlatforms[] = 'messenger';
+        }
+
+        $placements = [
+            'publisher_platforms'       => $publisherPlatforms,
+            'facebook_positions'        => ['feed'],
+            'instagram_positions'       => ['stream', 'story', 'reels'],
+        ];
+
+        if ($includeMessenger) {
+            $placements['messenger_positions'] = ['messenger_home'];
+        }
+
+        return $placements;
+    }
+
+    /**
+     * Remove audience_network from an existing targeting spec's publisher_platforms.
+     *
+     * @param  array $targeting Existing targeting array
+     * @return array Updated targeting array with audience_network removed
+     */
+    public static function excludeAudienceNetwork(array $targeting): array
+    {
+        if (!isset($targeting['publisher_platforms'])) {
+            return $targeting;
+        }
+
+        $targeting['publisher_platforms'] = array_values(
+            array_filter(
+                $targeting['publisher_platforms'],
+                fn(string $p): bool => $p !== 'audience_network'
+            )
+        );
+
+        return $targeting;
+    }
 }

@@ -433,6 +433,65 @@ class AdTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // update()
+    // -------------------------------------------------------------------------
+
+    public function testUpdatePostsToAdIdEndpoint(): void
+    {
+        $capture = new \stdClass();
+        $capture->endpoint = null;
+
+        $this->injectMockClient($this->buildCapturingPostMock($capture));
+
+        $ad = new Ad();
+        $ad->update(self::FAKE_AD_ID, ['status' => 'ACTIVE']);
+
+        $this->assertSame(self::FAKE_AD_ID, $capture->endpoint);
+    }
+
+    public function testUpdatePassesDataFieldsToClient(): void
+    {
+        $capture = new \stdClass();
+        $capture->data = null;
+
+        $this->injectMockClient($this->buildCapturingPostMock($capture));
+
+        $newCreative = json_encode(['creative_id' => 'new_creative_999']);
+        $ad = new Ad();
+        $ad->update(self::FAKE_AD_ID, ['creative' => $newCreative, 'status' => 'PAUSED']);
+
+        $this->assertSame($newCreative, $capture->data['creative']);
+        $this->assertSame('PAUSED', $capture->data['status']);
+    }
+
+    public function testUpdateCanSwapCreative(): void
+    {
+        $capture = new \stdClass();
+        $capture->data = null;
+
+        $this->injectMockClient($this->buildCapturingPostMock($capture));
+
+        $newCreativeId = 'creative_v2_888';
+        $ad = new Ad();
+        $ad->update(self::FAKE_AD_ID, [
+            'creative' => json_encode(['creative_id' => $newCreativeId]),
+        ]);
+
+        $decoded = json_decode($capture->data['creative'], true);
+        $this->assertSame($newCreativeId, $decoded['creative_id']);
+    }
+
+    public function testUpdateReturnsVoid(): void
+    {
+        $this->injectMockClient($this->buildCapturingPostMock(new \stdClass()));
+
+        $ad = new Ad();
+        $result = $ad->update(self::FAKE_AD_ID, ['status' => 'PAUSED']);
+
+        $this->assertNull($result);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

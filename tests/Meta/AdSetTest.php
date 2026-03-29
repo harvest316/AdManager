@@ -388,6 +388,167 @@ class AdSetTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // update()
+    // -------------------------------------------------------------------------
+
+    public function testUpdatePostsToAdSetIdEndpoint(): void
+    {
+        $capture = new \stdClass();
+        $capture->endpoint = null;
+
+        $this->injectMockClient($this->buildCapturingPostMock($capture));
+
+        $adSet = new AdSet();
+        $adSet->update(self::FAKE_AD_SET_ID, ['status' => 'ACTIVE']);
+
+        $this->assertSame(self::FAKE_AD_SET_ID, $capture->endpoint);
+    }
+
+    public function testUpdatePassesDataFieldsToClient(): void
+    {
+        $capture = new \stdClass();
+        $capture->data = null;
+
+        $this->injectMockClient($this->buildCapturingPostMock($capture));
+
+        $adSet = new AdSet();
+        $adSet->update(self::FAKE_AD_SET_ID, ['daily_budget' => 2000, 'status' => 'ACTIVE']);
+
+        $this->assertSame(2000, $capture->data['daily_budget']);
+        $this->assertSame('ACTIVE', $capture->data['status']);
+    }
+
+    public function testUpdateReturnsVoid(): void
+    {
+        $this->injectMockClient($this->buildCapturingPostMock(new \stdClass()));
+
+        $adSet = new AdSet();
+        $result = $adSet->update(self::FAKE_AD_SET_ID, ['status' => 'PAUSED']);
+
+        $this->assertNull($result);
+    }
+
+    // -------------------------------------------------------------------------
+    // buildPlacements()
+    // -------------------------------------------------------------------------
+
+    public function testBuildPlacementsIncludesFacebookAndInstagram(): void
+    {
+        $placements = AdSet::buildPlacements();
+
+        $this->assertContains('facebook', $placements['publisher_platforms']);
+        $this->assertContains('instagram', $placements['publisher_platforms']);
+    }
+
+    public function testBuildPlacementsExcludesAudienceNetworkByDefault(): void
+    {
+        $placements = AdSet::buildPlacements();
+
+        $this->assertNotContains('audience_network', $placements['publisher_platforms']);
+    }
+
+    public function testBuildPlacementsIncludesAudienceNetworkWhenRequested(): void
+    {
+        $placements = AdSet::buildPlacements(['exclude_audience_network' => false]);
+
+        $this->assertContains('audience_network', $placements['publisher_platforms']);
+    }
+
+    public function testBuildPlacementsExcludesMessengerByDefault(): void
+    {
+        $placements = AdSet::buildPlacements();
+
+        $this->assertNotContains('messenger', $placements['publisher_platforms']);
+        $this->assertArrayNotHasKey('messenger_positions', $placements);
+    }
+
+    public function testBuildPlacementsIncludesMessengerWhenRequested(): void
+    {
+        $placements = AdSet::buildPlacements(['include_messenger' => true]);
+
+        $this->assertContains('messenger', $placements['publisher_platforms']);
+        $this->assertArrayHasKey('messenger_positions', $placements);
+    }
+
+    public function testBuildPlacementsIncludesFacebookFeedPosition(): void
+    {
+        $placements = AdSet::buildPlacements();
+
+        $this->assertContains('feed', $placements['facebook_positions']);
+    }
+
+    public function testBuildPlacementsIncludesInstagramPositions(): void
+    {
+        $placements = AdSet::buildPlacements();
+
+        $this->assertContains('stream', $placements['instagram_positions']);
+        $this->assertContains('story', $placements['instagram_positions']);
+        $this->assertContains('reels', $placements['instagram_positions']);
+    }
+
+    // -------------------------------------------------------------------------
+    // excludeAudienceNetwork()
+    // -------------------------------------------------------------------------
+
+    public function testExcludeAudienceNetworkRemovesAudienceNetworkFromPlatforms(): void
+    {
+        $targeting = [
+            'publisher_platforms' => ['facebook', 'instagram', 'audience_network'],
+        ];
+
+        $result = AdSet::excludeAudienceNetwork($targeting);
+
+        $this->assertNotContains('audience_network', $result['publisher_platforms']);
+    }
+
+    public function testExcludeAudienceNetworkPreservesFacebookAndInstagram(): void
+    {
+        $targeting = [
+            'publisher_platforms' => ['facebook', 'instagram', 'audience_network'],
+        ];
+
+        $result = AdSet::excludeAudienceNetwork($targeting);
+
+        $this->assertContains('facebook', $result['publisher_platforms']);
+        $this->assertContains('instagram', $result['publisher_platforms']);
+    }
+
+    public function testExcludeAudienceNetworkIsIdempotentWhenAlreadyExcluded(): void
+    {
+        $targeting = [
+            'publisher_platforms' => ['facebook', 'instagram'],
+        ];
+
+        $result = AdSet::excludeAudienceNetwork($targeting);
+
+        $this->assertSame(['facebook', 'instagram'], $result['publisher_platforms']);
+    }
+
+    public function testExcludeAudienceNetworkReturnsUnchangedWhenNoPlatformsKey(): void
+    {
+        $targeting = [
+            'geo_locations' => ['countries' => ['AU']],
+        ];
+
+        $result = AdSet::excludeAudienceNetwork($targeting);
+
+        $this->assertArrayNotHasKey('publisher_platforms', $result);
+        $this->assertSame($targeting, $result);
+    }
+
+    public function testExcludeAudienceNetworkReindexesArray(): void
+    {
+        $targeting = [
+            'publisher_platforms' => ['facebook', 'audience_network', 'instagram'],
+        ];
+
+        $result = AdSet::excludeAudienceNetwork($targeting);
+
+        // Array should be re-indexed (no gaps)
+        $this->assertSame([0, 1], array_keys($result['publisher_platforms']));
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

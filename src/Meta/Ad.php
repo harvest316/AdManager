@@ -164,6 +164,19 @@ class Ad
     }
 
     /**
+     * Update an ad's fields.
+     *
+     * Common uses: swap creative, change status, rename the ad.
+     *
+     * @param string $adId Meta ad ID
+     * @param array  $data Fields to update (e.g. ['creative' => json_encode(['creative_id' => 'new_id'])])
+     */
+    public function update(string $adId, array $data): void
+    {
+        $this->client->post($adId, $data);
+    }
+
+    /**
      * List ad creatives for the account.
      */
     public function listCreatives(): array
