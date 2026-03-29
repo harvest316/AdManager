@@ -362,4 +362,171 @@ class AnalyserTest extends TestCase
         $this->assertSame([], $result['alerts']);
         $this->assertSame([], $result['recommendations']);
     }
+
+    // -------------------------------------------------------------------------
+    // enrichWithGA4() — GA4 bounce rate integration
+    // -------------------------------------------------------------------------
+
+    /**
+     * Helper: insert a ga4_performance row for campaign_name + date.
+     */
+    private function insertGA4Row(
+        int $projectId,
+        string $campaignName,
+        int $sessions,
+        float $bounceRate,
+        float $conversions = 0,
+        float $revenue = 0.0,
+        string $date = ''
+    ): void {
+        if ($date === '') {
+            $date = date('Y-m-d', strtotime('-1 days'));
+        }
+        $this->db->exec(
+            "INSERT INTO ga4_performance
+                 (project_id, campaign_name, sessions, bounce_rate, conversions, revenue, date)
+             VALUES
+                 ({$projectId}, '{$campaignName}', {$sessions}, {$bounceRate}, {$conversions}, {$revenue}, '{$date}')"
+        );
+    }
+
+    public function testEnrichWithGA4ReturnsEmptyWhenNoCampaignPerformance(): void
+    {
+        $result = $this->analyser->enrichWithGA4(1);
+
+        $this->assertSame([], $result);
+    }
+
+    public function testEnrichWithGA4ReturnsCampaignRows(): void
+    {
+        $this->insertPerformance(1, 1000, 100, 5, 500.0, 100_000_000); // CPA $20
+
+        $result = $this->analyser->enrichWithGA4(1);
+
+        $this->assertNotEmpty($result);
+        $this->assertSame(1, $result[0]['campaign_id']);
+        $this->assertSame('Test Campaign', $result[0]['campaign_name']);
+        $this->assertArrayHasKey('ga4_bounce_rate', $result[0]);
+        $this->assertArrayHasKey('recommendation', $result[0]);
+    }
+
+    public function testEnrichWithGA4ReturnsNullBounceRateWhenNoGA4Data(): void
+    {
+        $this->insertPerformance(1, 1000, 100, 5, 500.0, 100_000_000);
+
+        $result = $this->analyser->enrichWithGA4(1);
+
+        $this->assertNull($result[0]['ga4_bounce_rate']);
+    }
+
+    public function testEnrichWithGA4RecommendsFixLandingPageWhenHighCpaAndHighBounceRate(): void
+    {
+        // Set CPA target: $10
+        $this->db->exec("INSERT INTO goals (project_id, metric, target_value) VALUES (1, 'cpa', 10.0)");
+
+        // Campaign: 5 conversions on $200 spend = CPA $40 (> 2× $10 target = $20)
+        $this->insertPerformance(1, 1000, 100, 5, 500.0, 200_000_000);
+
+        // GA4: 80% bounce rate (> 70%)
+        $this->insertGA4Row(1, 'Test Campaign', 1000, 80.0);
+
+        $result = $this->analyser->enrichWithGA4(1);
+
+        $this->assertNotEmpty($result);
+        $this->assertSame('fix landing page', $result[0]['recommendation']);
+    }
+
+    public function testEnrichWithGA4RecommendsAddNegativesWhenHighCpaButLowBounceRate(): void
+    {
+        // CPA target: $10
+        $this->db->exec("INSERT INTO goals (project_id, metric, target_value) VALUES (1, 'cpa', 10.0)");
+
+        // CPA = $40 (> 2× $10 target)
+        $this->insertPerformance(1, 1000, 100, 5, 500.0, 200_000_000);
+
+        // GA4: 50% bounce rate (< 70%)
+        $this->insertGA4Row(1, 'Test Campaign', 1000, 50.0);
+
+        $result = $this->analyser->enrichWithGA4(1);
+
+        $this->assertSame('add negatives', $result[0]['recommendation']);
+    }
+
+    public function testEnrichWithGA4NullRecommendationWhenCpaWithinTarget(): void
+    {
+        // CPA target: $50
+        $this->db->exec("INSERT INTO goals (project_id, metric, target_value) VALUES (1, 'cpa', 50.0)");
+
+        // CPA = $20 (well under target)
+        $this->insertPerformance(1, 1000, 100, 5, 500.0, 100_000_000);
+        $this->insertGA4Row(1, 'Test Campaign', 1000, 80.0);
+
+        $result = $this->analyser->enrichWithGA4(1);
+
+        // CPA $20 is not > 2× $50 = $100, so no recommendation
+        $this->assertNull($result[0]['recommendation']);
+    }
+
+    public function testEnrichWithGA4NullRecommendationWhenNoCpaGoalDefined(): void
+    {
+        // No goal defined — target = 0 → enrichment skips the CPA check
+        $this->insertPerformance(1, 1000, 100, 5, 500.0, 200_000_000);
+        $this->insertGA4Row(1, 'Test Campaign', 1000, 90.0);
+
+        $result = $this->analyser->enrichWithGA4(1);
+
+        $this->assertNull($result[0]['recommendation']);
+    }
+
+    public function testEnrichWithGA4AttachesBounceRateToCorrectCampaign(): void
+    {
+        // Add second campaign
+        $this->db->exec(
+            "INSERT INTO campaigns (id, project_id, platform, name, type, status)
+             VALUES (2, 1, 'meta', 'Meta Campaign', 'display', 'enabled')"
+        );
+
+        $this->db->exec("INSERT INTO goals (project_id, metric, target_value) VALUES (1, 'cpa', 10.0)");
+
+        // Campaign 1: high CPA
+        $this->insertPerformance(1, 1000, 100, 5, 500.0, 200_000_000);
+        // Campaign 2: also high CPA
+        $date = date('Y-m-d', strtotime('-1 days'));
+        $this->db->exec(
+            "INSERT INTO performance (campaign_id, date, impressions, clicks, conversions, conversion_value, cost_micros)
+             VALUES (2, '{$date}', 2000, 200, 5, 500.0, 300000000)"
+        );
+
+        // Only campaign 1 has GA4 bounce rate data
+        $this->insertGA4Row(1, 'Test Campaign', 1000, 85.0);
+        // 'Meta Campaign' has no GA4 data
+
+        $result = $this->analyser->enrichWithGA4(1);
+
+        $c1 = array_values(array_filter($result, fn($r) => $r['campaign_id'] === 1))[0] ?? null;
+        $c2 = array_values(array_filter($result, fn($r) => $r['campaign_id'] === 2))[0] ?? null;
+
+        $this->assertNotNull($c1);
+        $this->assertNotNull($c2);
+
+        $this->assertEqualsWithDelta(85.0, $c1['ga4_bounce_rate'], 0.01);
+        $this->assertNull($c2['ga4_bounce_rate']);
+
+        // Campaign 1: high CPA + high bounce → fix landing page
+        $this->assertSame('fix landing page', $c1['recommendation']);
+        // Campaign 2: high CPA but no bounce data → add negatives (fallback)
+        $this->assertSame('add negatives', $c2['recommendation']);
+    }
+
+    public function testEnrichWithGA4ContainsExpectedOutputFields(): void
+    {
+        $this->insertPerformance(1, 1000, 100, 5, 500.0, 100_000_000);
+
+        $result = $this->analyser->enrichWithGA4(1);
+
+        $this->assertNotEmpty($result);
+        foreach (['campaign_id', 'campaign_name', 'platform', 'cost', 'conversions', 'cpa', 'target_cpa', 'ga4_bounce_rate', 'recommendation'] as $field) {
+            $this->assertArrayHasKey($field, $result[0], "Missing field: {$field}");
+        }
+    }
 }

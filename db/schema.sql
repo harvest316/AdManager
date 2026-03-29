@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   type TEXT NOT NULL,
   status TEXT DEFAULT 'draft',
   daily_budget_aud REAL,
+  bid_strategy TEXT DEFAULT 'manual_cpc',
   strategy_id INTEGER REFERENCES strategies(id),
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
@@ -279,3 +280,22 @@ CREATE INDEX IF NOT EXISTS idx_search_terms_campaign ON search_terms(campaign_id
 CREATE INDEX IF NOT EXISTS idx_search_terms_ad_group ON search_terms(ad_group_id);
 CREATE INDEX IF NOT EXISTS idx_search_terms_date ON search_terms(date);
 CREATE INDEX IF NOT EXISTS idx_search_terms_term ON search_terms(search_term);
+
+-- GA4 landing-page + source/medium performance (Week 4)
+
+CREATE TABLE IF NOT EXISTS ga4_performance (
+  id INTEGER PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  landing_page TEXT,
+  source TEXT,
+  medium TEXT,
+  campaign_name TEXT,
+  sessions INTEGER DEFAULT 0,
+  bounce_rate REAL,
+  avg_session_duration REAL,
+  conversions REAL DEFAULT 0,
+  revenue REAL DEFAULT 0,
+  date TEXT NOT NULL,
+  synced_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ga4_project_date ON ga4_performance(project_id, date);

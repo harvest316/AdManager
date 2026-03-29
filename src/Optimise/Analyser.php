@@ -156,6 +156,104 @@ class Analyser
     }
 
     /**
+     * Enrich per-campaign analysis with GA4 bounce rate data.
+     *
+     * Joins the performance table (campaign-level) with ga4_performance on
+     * campaign_name + date for the last 14 days.
+     *
+     * For campaigns where CPA > 2× the project target AND landing-page bounce rate
+     * > 70%, the recommendation is overridden to "fix landing page" instead of the
+     * default "add negatives".
+     *
+     * @return array  Per-campaign rows with added ga4_bounce_rate and recommendation keys.
+     */
+    public function enrichWithGA4(int $projectId): array
+    {
+        $db = DB::get();
+
+        // Get project target CPA (if defined)
+        $targetStmt = $db->prepare(
+            "SELECT target_value FROM goals WHERE project_id = ? AND metric = 'cpa' LIMIT 1"
+        );
+        $targetStmt->execute([$projectId]);
+        $targetCpa = (float) ($targetStmt->fetch()['target_value'] ?? 0);
+
+        // Campaign-level performance for last 14 days
+        $perfStmt = $db->prepare(
+            "SELECT
+                c.id,
+                c.name,
+                c.platform,
+                SUM(p.clicks) AS clicks,
+                SUM(p.cost_micros) AS cost_micros,
+                SUM(p.conversions) AS conversions
+             FROM performance p
+             JOIN campaigns c ON c.id = p.campaign_id
+             WHERE c.project_id = ?
+               AND p.date >= date('now', '-14 days')
+             GROUP BY c.id"
+        );
+        $perfStmt->execute([$projectId]);
+        $campaigns = $perfStmt->fetchAll();
+
+        if (empty($campaigns)) {
+            return [];
+        }
+
+        // GA4 bounce rate aggregated by campaign_name for last 14 days
+        // (average weighted by sessions)
+        $ga4Stmt = $db->prepare(
+            "SELECT
+                campaign_name,
+                SUM(sessions * bounce_rate) / NULLIF(SUM(sessions), 0) AS weighted_bounce_rate
+             FROM ga4_performance
+             WHERE project_id = ?
+               AND date >= date('now', '-14 days')
+               AND bounce_rate IS NOT NULL
+             GROUP BY campaign_name"
+        );
+        $ga4Stmt->execute([$projectId]);
+        $ga4Map = [];
+        foreach ($ga4Stmt->fetchAll() as $g) {
+            $ga4Map[$g['campaign_name']] = (float) $g['weighted_bounce_rate'];
+        }
+
+        $result = [];
+        foreach ($campaigns as $c) {
+            $costMicros  = (int) ($c['cost_micros'] ?? 0);
+            $cost        = $costMicros / 1_000_000;
+            $conversions = (float) ($c['conversions'] ?? 0);
+            $cpa         = $conversions > 0 ? $cost / $conversions : null;
+
+            $bounceRate    = $ga4Map[$c['name']] ?? null;
+            $recommendation = null;
+
+            if ($cpa !== null && $targetCpa > 0 && $cpa > ($targetCpa * 2.0)) {
+                // CPA is more than 2× target
+                if ($bounceRate !== null && $bounceRate > 70.0) {
+                    $recommendation = 'fix landing page';
+                } else {
+                    $recommendation = 'add negatives';
+                }
+            }
+
+            $result[] = [
+                'campaign_id'      => (int) $c['id'],
+                'campaign_name'    => $c['name'],
+                'platform'         => $c['platform'],
+                'cost'             => round($cost, 2),
+                'conversions'      => $conversions,
+                'cpa'              => $cpa !== null ? round($cpa, 2) : null,
+                'target_cpa'       => $targetCpa > 0 ? $targetCpa : null,
+                'ga4_bounce_rate'  => $bounceRate !== null ? round($bounceRate, 2) : null,
+                'recommendation'   => $recommendation,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
      * Generate a full optimisation report using Claude.
      */
     public function generateReport(int $projectId, int $days = 7): string

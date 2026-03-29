@@ -494,4 +494,157 @@ class BudgetAllocatorTest extends TestCase
 
         $this->assertSame([], $result);
     }
+
+    // -------------------------------------------------------------------------
+    // recommendCrossPlatform() — cross-platform reallocation
+    // -------------------------------------------------------------------------
+
+    private function insertCampaignWithPlatform(int $id, string $platform, string $name, float $dailyBudget, string $status = 'enabled', string $createdAt = ''): void
+    {
+        if ($createdAt === '') {
+            $createdAt = date('Y-m-d H:i:s', strtotime('-30 days'));
+        }
+        $this->db->exec(
+            "INSERT INTO campaigns (id, project_id, platform, name, type, status, daily_budget_aud, created_at)
+             VALUES ({$id}, 1, '{$platform}', '{$name}', 'search', '{$status}', {$dailyBudget}, '{$createdAt}')"
+        );
+    }
+
+    private function insertBudgetForPlatform(string $platform, float $budget): void
+    {
+        $this->db->exec(
+            "INSERT OR REPLACE INTO budgets (project_id, platform, daily_budget_aud)
+             VALUES (1, '{$platform}', {$budget})"
+        );
+    }
+
+    private function insertPerfForCampaign(int $campaignId, int $daysAgo, int $impressions, int $clicks, float $conversions, float $conversionValue, int $costMicros): void
+    {
+        $date = date('Y-m-d', strtotime("-{$daysAgo} days"));
+        $this->db->exec(
+            "INSERT INTO performance (campaign_id, date, impressions, clicks, conversions, conversion_value, cost_micros)
+             VALUES ({$campaignId}, '{$date}', {$impressions}, {$clicks}, {$conversions}, {$conversionValue}, {$costMicros})"
+        );
+    }
+
+    public function testRecommendCrossPlatformReturnsEmptyWhenNoEligiblePlatforms(): void
+    {
+        // Both campaigns just created (< 14 days)
+        $this->insertCampaignWithPlatform(10, 'google', 'G Camp', 100.0, 'enabled', date('Y-m-d H:i:s', strtotime('-3 days')));
+        $this->insertCampaignWithPlatform(11, 'meta',   'M Camp', 100.0, 'enabled', date('Y-m-d H:i:s', strtotime('-3 days')));
+        $this->insertBudgetForPlatform('google', 100.0);
+        $this->insertBudgetForPlatform('meta',   100.0);
+
+        $result = $this->allocator->recommendCrossPlatform(1);
+
+        // Both excluded (< 14 days)
+        $eligible = array_filter($result, fn($r) => ($r['excluded'] ?? false) === false);
+        $this->assertEmpty($eligible);
+    }
+
+    public function testRecommendCrossPlatformExcludesPlatformsUnder50Conversions(): void
+    {
+        $oldDate = date('Y-m-d H:i:s', strtotime('-60 days'));
+        $this->insertCampaignWithPlatform(10, 'google', 'G Camp', 150.0, 'enabled', $oldDate);
+        $this->insertCampaignWithPlatform(11, 'meta',   'M Camp', 50.0,  'enabled', $oldDate);
+        $this->insertBudgetForPlatform('google', 150.0);
+        $this->insertBudgetForPlatform('meta',   50.0);
+
+        // Google: 40 conversions (under 50 threshold)
+        $this->insertPerfForCampaign(10, 1, 1000, 100, 40, 4000.0, 50_000_000);
+        // Meta: 30 conversions (under 50 threshold)
+        $this->insertPerfForCampaign(11, 1, 1000, 80, 30, 3000.0, 40_000_000);
+
+        $result = $this->allocator->recommendCrossPlatform(1);
+
+        $excluded = array_filter($result, fn($r) => $r['excluded'] === true);
+        $this->assertCount(2, array_values($excluded), 'Both platforms should be excluded');
+    }
+
+    public function testRecommendCrossPlatformEnforces30PercentFloor(): void
+    {
+        $oldDate = date('Y-m-d H:i:s', strtotime('-60 days'));
+        $this->insertCampaignWithPlatform(10, 'google', 'G Camp', 150.0, 'enabled', $oldDate);
+        $this->insertCampaignWithPlatform(11, 'meta',   'M Camp', 50.0,  'enabled', $oldDate);
+        $this->insertBudgetForPlatform('google', 150.0);
+        $this->insertBudgetForPlatform('meta',   50.0);
+
+        // Google: extremely strong ROAS
+        $this->insertPerfForCampaign(10, 1, 10000, 1000, 200, 100000.0, 100_000_000);
+        // Meta: weak — but still eligible with 50+ conversions
+        $this->insertPerfForCampaign(11, 1, 1000, 50,   50,  100.0,    50_000_000);
+
+        $result = $this->allocator->recommendCrossPlatform(1);
+
+        $totalEligibleBudget = 200.0; // 150 + 50
+        $floor               = $totalEligibleBudget * 0.30; // $60
+
+        foreach ($result as $rec) {
+            if (!isset($rec['excluded']) || $rec['excluded'] === false) {
+                $this->assertGreaterThanOrEqual(
+                    $floor,
+                    $rec['recommended_budget'],
+                    "Platform {$rec['platform']} must not drop below 30% floor ({$floor})"
+                );
+            }
+        }
+    }
+
+    public function testRecommendCrossPlatformReallocatesTowardHigherRoas(): void
+    {
+        $oldDate = date('Y-m-d H:i:s', strtotime('-60 days'));
+        $this->insertCampaignWithPlatform(10, 'google', 'G Camp', 100.0, 'enabled', $oldDate);
+        $this->insertCampaignWithPlatform(11, 'meta',   'M Camp', 100.0, 'enabled', $oldDate);
+        $this->insertBudgetForPlatform('google', 100.0);
+        $this->insertBudgetForPlatform('meta',   100.0);
+
+        // Google ROAS 20, Meta ROAS 2
+        $this->insertPerfForCampaign(10, 1, 5000, 500, 100, 20000.0, 100_000_000);
+        $this->insertPerfForCampaign(11, 1, 5000, 500, 100, 2000.0,  100_000_000);
+
+        $result = $this->allocator->recommendCrossPlatform(1);
+
+        $googleRec = array_values(array_filter($result, fn($r) => $r['platform'] === 'google' && !$r['excluded']))[0] ?? null;
+        $metaRec   = array_values(array_filter($result, fn($r) => $r['platform'] === 'meta'   && !$r['excluded']))[0] ?? null;
+
+        // If there are recommendations, Google should get more and Meta less
+        if ($googleRec !== null) {
+            $this->assertGreaterThan(0, $googleRec['change'], 'Google (high ROAS) should get a budget increase');
+        }
+        if ($metaRec !== null) {
+            $this->assertLessThan(0, $metaRec['change'], 'Meta (low ROAS) should get a budget decrease');
+        }
+
+        // At least one recommendation
+        $eligible = array_filter($result, fn($r) => !$r['excluded']);
+        $this->assertNotEmpty($eligible);
+    }
+
+    public function testRecommendCrossPlatformOutputShape(): void
+    {
+        $oldDate = date('Y-m-d H:i:s', strtotime('-60 days'));
+        $this->insertCampaignWithPlatform(10, 'google', 'G Camp', 100.0, 'enabled', $oldDate);
+        $this->insertCampaignWithPlatform(11, 'meta',   'M Camp', 100.0, 'enabled', $oldDate);
+        $this->insertBudgetForPlatform('google', 100.0);
+        $this->insertBudgetForPlatform('meta',   100.0);
+
+        $this->insertPerfForCampaign(10, 1, 5000, 500, 100, 20000.0, 100_000_000);
+        $this->insertPerfForCampaign(11, 1, 5000, 100, 50,  500.0,   100_000_000);
+
+        $result = $this->allocator->recommendCrossPlatform(1);
+
+        $this->assertNotEmpty($result);
+        $rec = $result[0];
+
+        foreach (['platform', 'current_budget', 'recommended_budget', 'reason', 'excluded'] as $field) {
+            $this->assertArrayHasKey($field, $rec, "Missing field: {$field}");
+        }
+    }
+
+    public function testRecommendCrossPlatformReturnsEmptyForProjectWithNoCampaigns(): void
+    {
+        $result = $this->allocator->recommendCrossPlatform(1);
+
+        $this->assertSame([], $result);
+    }
 }

@@ -225,6 +225,185 @@ class BudgetAllocator
     }
 
     /**
+     * Recommend budget reallocation across ALL platforms for a project.
+     *
+     * Uses the same ROAS/CTR scoring logic as recommend(), but allocates against
+     * the project's total budget across all platforms rather than within a single
+     * platform.
+     *
+     * Exclusion rules:
+     *   - Platforms live < 14 days (based on earliest campaign created_at) are excluded.
+     *   - Platforms with fewer than 50 total conversions (last 14 days) are excluded.
+     *
+     * Floor: no platform may drop below 30% of total project budget.
+     *
+     * @return array of ['platform', 'current_budget', 'recommended_budget', 'reason', ...]
+     */
+    public function recommendCrossPlatform(int $projectId): array
+    {
+        $db = DB::get();
+
+        // Aggregate performance and budget per platform
+        $stmt = $db->prepare(
+            "SELECT
+                c.platform,
+                MIN(c.created_at) AS earliest_created,
+                SUM(p.impressions) AS impressions,
+                SUM(p.clicks) AS clicks,
+                SUM(p.cost_micros) AS cost_micros,
+                SUM(p.conversions) AS conversions,
+                SUM(p.conversion_value) AS conversion_value
+             FROM campaigns c
+             LEFT JOIN performance p ON p.campaign_id = c.id
+                AND p.date >= date('now', '-14 days')
+             WHERE c.project_id = ?
+               AND c.status IN ('enabled', 'active')
+             GROUP BY c.platform"
+        );
+        $stmt->execute([$projectId]);
+        $platformRows = $stmt->fetchAll();
+
+        if (empty($platformRows)) {
+            return [];
+        }
+
+        // Current budget per platform (from budgets table)
+        $budgetStmt = $db->prepare(
+            'SELECT platform, daily_budget_aud FROM budgets WHERE project_id = ?'
+        );
+        $budgetStmt->execute([$projectId]);
+        $budgetMap = [];
+        foreach ($budgetStmt->fetchAll() as $b) {
+            $budgetMap[$b['platform']] = (float) $b['daily_budget_aud'];
+        }
+
+        $totalBudget = array_sum($budgetMap);
+        if ($totalBudget <= 0) {
+            return [];
+        }
+
+        $now          = time();
+        $minAgeDays   = 14;
+        $minConversions = 50;
+
+        $eligible    = [];
+        $ineligible  = [];
+
+        foreach ($platformRows as $r) {
+            $platform  = $r['platform'];
+            $agedays   = $r['earliest_created']
+                ? (int) (($now - strtotime($r['earliest_created'])) / 86400)
+                : 0;
+            $convs     = (float) ($r['conversions'] ?? 0);
+
+            $current  = $budgetMap[$platform] ?? 0.0;
+            $cost     = (int) ($r['cost_micros'] ?? 0) / 1_000_000;
+            $revenue  = (float) ($r['conversion_value'] ?? 0);
+            $clicks   = (int) ($r['clicks'] ?? 0);
+            $imps     = (int) ($r['impressions'] ?? 0);
+            $roas     = $cost > 0 ? $revenue / $cost : 0.0;
+            $ctr      = $imps > 0 ? ($clicks / $imps) * 100 : 0.0;
+
+            if ($agedays < $minAgeDays) {
+                $ineligible[] = [
+                    'platform'           => $platform,
+                    'current_budget'     => round($current, 2),
+                    'recommended_budget' => round($current, 2),
+                    'reason'             => "Platform live only {$agedays} days — excluded from rebalancing (min {$minAgeDays}).",
+                    'excluded'           => true,
+                ];
+                continue;
+            }
+
+            if ($convs < $minConversions) {
+                $ineligible[] = [
+                    'platform'           => $platform,
+                    'current_budget'     => round($current, 2),
+                    'recommended_budget' => round($current, 2),
+                    'reason'             => "Only {$convs} conversions in last 14 days — excluded from rebalancing (min {$minConversions}).",
+                    'excluded'           => true,
+                ];
+                continue;
+            }
+
+            $score = 0.0;
+            if ($convs > 0) {
+                $score = $roas * 0.7 + $ctr * 0.3;
+            } elseif ($clicks > 0) {
+                $score = $ctr * 0.3;
+            }
+
+            $eligible[] = [
+                'platform'        => $platform,
+                'current_budget'  => round($current, 2),
+                'conversions'     => $convs,
+                'cost'            => round($cost, 2),
+                'revenue'         => round($revenue, 2),
+                'roas'            => round($roas, 2),
+                'ctr'             => round($ctr, 2),
+                'impressions'     => $imps,
+                'score'           => $score,
+            ];
+        }
+
+        if (count($eligible) < 2) {
+            // Cannot rebalance with fewer than 2 eligible platforms — return ineligible notices only
+            return $ineligible;
+        }
+
+        // Budget to distribute = sum of eligible platforms' current budgets
+        $eligibleBudget = array_sum(array_column($eligible, 'current_budget'));
+        $floor          = $eligibleBudget * 0.30;
+        $totalScore     = array_sum(array_column($eligible, 'score'));
+
+        $recommendations = [];
+        foreach ($eligible as $p) {
+            $current = $p['current_budget'];
+
+            $recommended = $current; // fallback: no data → keep current
+            if ($totalScore > 0) {
+                $idealShare  = ($p['score'] / $totalScore) * $eligibleBudget;
+                // Apply 30% floor and ±50% per-step guard
+                $maxIncrease = $current * 1.5;
+                $minDecrease = max($current * 0.5, $floor);
+                $recommended = max($minDecrease, min($maxIncrease, $idealShare));
+            }
+
+            $recommended = round($recommended, 2);
+            $change      = $recommended - $current;
+            $changePct   = $current > 0 ? ($change / $current) * 100 : 0.0;
+
+            $direction = $change > 0 ? 'Increase' : ($change < 0 ? 'Decrease' : 'Maintain');
+            $parts = ["{$direction} by " . abs(round($changePct, 0)) . "% (cross-platform reallocation)"];
+            if ($p['roas'] > 0) {
+                $parts[] = "ROAS: {$p['roas']}x";
+            }
+            if ($p['conversions'] > 0) {
+                $parts[] = "Conversions: {$p['conversions']}";
+            }
+
+            if (abs($changePct) > 5) {
+                $recommendations[] = [
+                    'platform'           => $p['platform'],
+                    'current_budget'     => $current,
+                    'recommended_budget' => $recommended,
+                    'change'             => round($change, 2),
+                    'change_pct'         => round($changePct, 1),
+                    'roas'               => $p['roas'],
+                    'conversions'        => $p['conversions'],
+                    'reason'             => implode('. ', $parts) . '.',
+                    'excluded'           => false,
+                ];
+            }
+        }
+
+        // Sort by absolute change descending, then append ineligible notices
+        usort($recommendations, fn($a, $b) => abs($b['change']) <=> abs($a['change']));
+
+        return array_merge($recommendations, $ineligible);
+    }
+
+    /**
      * Build a human-readable reason for the budget recommendation.
      */
     private function buildReason(array $campaign, float $change, float $changePct): string
