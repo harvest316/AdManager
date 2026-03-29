@@ -17,7 +17,7 @@ class Proofreader
     private string $claudeBin;
     private string $promptsDir;
     private string $policiesDir;
-    private int $timeout = 120;
+    private int $timeout = 180;
 
     public function __construct()
     {
@@ -26,8 +26,10 @@ class Proofreader
         $this->policiesDir = dirname(__DIR__, 2) . '/policies';
     }
 
+    private const BATCH_SIZE = 15;
+
     /**
-     * Proofread a batch of copy items.
+     * Proofread a batch of copy items (auto-batches if > BATCH_SIZE).
      *
      * @param array  $items    Copy items from ad_copy table
      * @param array  $project  Project row (needs: display_name, website_url)
@@ -36,6 +38,41 @@ class Proofreader
      * @return array|null  Parsed LLM response or null on failure
      */
     public function proofread(array $items, array $project, array $strategy, string $market = 'all'): ?array
+    {
+        if (count($items) <= self::BATCH_SIZE) {
+            return $this->proofreadBatch($items, $project, $strategy, $market);
+        }
+
+        // Auto-batch: split into chunks and merge results
+        $chunks = array_chunk($items, self::BATCH_SIZE);
+        $allItems = [];
+        $totalScore = 0;
+        $batchCount = 0;
+
+        foreach ($chunks as $i => $chunk) {
+            echo "    Batch " . ($i + 1) . "/" . count($chunks) . " (" . count($chunk) . " items)...\n";
+            $result = $this->proofreadBatch($chunk, $project, $strategy, $market);
+            if ($result === null) {
+                echo "    Batch " . ($i + 1) . " failed, skipping\n";
+                continue;
+            }
+            $allItems = array_merge($allItems, $result['items'] ?? []);
+            $totalScore += $result['overall_score'] ?? 0;
+            $batchCount++;
+        }
+
+        if ($batchCount === 0) return null;
+
+        return [
+            'overall_score' => (int) round($totalScore / $batchCount),
+            'items' => $allItems,
+        ];
+    }
+
+    /**
+     * Proofread a single batch of items.
+     */
+    private function proofreadBatch(array $items, array $project, array $strategy, string $market): ?array
     {
         $prompt = $this->buildPrompt($items, $project, $strategy, $market);
         $response = $this->callClaude($prompt);

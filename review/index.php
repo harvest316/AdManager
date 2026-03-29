@@ -156,6 +156,13 @@ select{background:var(--bg3);color:var(--t1);border:1px solid var(--border);bord
 .detail-content dt{color:var(--t1);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;margin-top:10px}
 .detail-content dt:first-child{margin-top:0}
 .detail-content dd{margin:2px 0 0 0}
+.strategy-content{font-size:14px;line-height:1.7;color:var(--t1);max-width:900px}
+.strategy-content h1{font-size:24px;margin:16px 0 8px}
+.strategy-content h2{font-size:20px;margin:24px 0 12px}
+.strategy-content h3{font-size:16px;margin:16px 0 8px;color:var(--blue)}
+.strategy-content h4{font-size:14px;margin:12px 0 6px;color:var(--t2)}
+.strategy-content li{margin:4px 0}
+.strategy-content strong{color:var(--t1)}
 .expand-btn{cursor:pointer;color:var(--blue);font-size:11px;border:none;background:none;padding:0;text-decoration:underline}
 .badge-tl{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.7);color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .badge-tr{position:absolute;top:10px;right:10px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
@@ -381,6 +388,80 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
  <?php endforeach; ?>
  <?php else: ?>
   <div class="empty"><div class="ic">&#128640;</div><h3>No campaigns</h3><p>Create campaigns with the strategy or CLI tools.</p></div>
+ <?php endif; ?>
+<?php elseif($tab==='strategy'): ?>
+ <?php if(!empty($strategies)): ?>
+ <div class="sec" style="margin-bottom:16px">
+  <div class="sec-t">Strategy Documents <span class="bg"><?=count($strategies)?></span></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+   <?php foreach($strategies as $s): $isActive = $currentStrategy && (int)$currentStrategy['id'] === (int)$s['id']; ?>
+   <a href="?project=<?=$projectId?>&tab=strategy&strategy_id=<?=$s['id']?>"
+      class="fb <?=$isActive?'on':''?>"
+      style="color:<?=$isActive?'var(--blue)':'var(--t2)'?>;background:<?=$isActive?'#0d2240':'var(--bg3)'?>">
+     <?=e($s['name'])?> <span class="fc"><?=e($s['platform'])?></span>
+   </a>
+   <?php endforeach; ?>
+  </div>
+ </div>
+
+ <?php if($currentStrategy): ?>
+ <div class="sec">
+  <div class="sec-t"><?=e($currentStrategy['name'])?> <span class="bg"><?=e($currentStrategy['platform'])?> / <?=e($currentStrategy['campaign_type'])?></span></div>
+  <div style="font-size:12px;color:var(--t3);margin-bottom:16px">
+   Model: <?=e($currentStrategy['model'])?> &middot; Generated: <?=e($currentStrategy['created_at'])?>
+  </div>
+  <div class="strategy-content"><?php
+    $md = $currentStrategy['full_strategy'];
+    // Render markdown as HTML (basic conversion)
+    $md = e($md);
+    // Headers
+    $md = preg_replace('/^######\s+(.+)$/m', '<h6>$1</h6>', $md);
+    $md = preg_replace('/^#####\s+(.+)$/m', '<h5>$1</h5>', $md);
+    $md = preg_replace('/^####\s+(.+)$/m', '<h4>$1</h4>', $md);
+    $md = preg_replace('/^###\s+(.+)$/m', '<h3>$1</h3>', $md);
+    $md = preg_replace('/^##\s+(.+)$/m', '<h2 style="margin-top:24px;padding-bottom:8px;border-bottom:1px solid var(--border)">$1</h2>', $md);
+    $md = preg_replace('/^#\s+(.+)$/m', '<h1>$1</h1>', $md);
+    // Bold and italic
+    $md = preg_replace('/\*\*\*(.+?)\*\*\*/s', '<strong><em>$1</em></strong>', $md);
+    $md = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $md);
+    $md = preg_replace('/\*(.+?)\*/s', '<em>$1</em>', $md);
+    // Inline code
+    $md = preg_replace('/`([^`]+)`/', '<code style="background:var(--bg3);padding:2px 6px;border-radius:3px;font-size:13px">$1</code>', $md);
+    // Blockquotes
+    $md = preg_replace('/^&gt;\s?(.+)$/m', '<blockquote style="border-left:3px solid var(--blue);padding:8px 16px;margin:8px 0;color:var(--t2);background:var(--bg2);border-radius:0 var(--r) var(--r) 0">$1</blockquote>', $md);
+    // Horizontal rules
+    $md = preg_replace('/^---+$/m', '<hr style="border:none;border-top:1px solid var(--border);margin:24px 0">', $md);
+    // Tables (basic: | header | header |)
+    $md = preg_replace_callback('/(?:^\|.+\|$\n?)+/m', function($m) {
+        $rows = array_filter(explode("\n", trim($m[0])));
+        $html = '<table class="ct" style="margin:12px 0"><thead>';
+        $isHeader = true;
+        foreach ($rows as $row) {
+            $row = trim($row, '| ');
+            if (preg_match('/^[\s|:-]+$/', $row)) { $isHeader = false; $html .= '</thead><tbody>'; continue; }
+            $cells = array_map('trim', explode('|', $row));
+            $tag = $isHeader ? 'th' : 'td';
+            $html .= '<tr>';
+            foreach ($cells as $cell) $html .= "<{$tag}>{$cell}</{$tag}>";
+            $html .= '</tr>';
+        }
+        $html .= ($isHeader ? '</thead>' : '</tbody>') . '</table>';
+        return $html;
+    }, $md);
+    // Lists (basic)
+    $md = preg_replace('/^\d+\.\s+(.+)$/m', '<li style="margin-left:20px;list-style:decimal">$1</li>', $md);
+    $md = preg_replace('/^[-*]\s+(.+)$/m', '<li style="margin-left:20px;list-style:disc">$1</li>', $md);
+    // Paragraphs (double newline)
+    $md = preg_replace('/\n\n+/', '</p><p style="margin:8px 0">', $md);
+    $md = '<p style="margin:8px 0">' . $md . '</p>';
+    echo $md;
+  ?></div>
+ </div>
+ <?php else: ?>
+  <div class="empty"><div class="ic">&#128203;</div><h3>Select a strategy</h3><p>Click one of the strategies above to view it.</p></div>
+ <?php endif; ?>
+ <?php else: ?>
+  <div class="empty"><div class="ic">&#128203;</div><h3>No strategies</h3><p>Generate a strategy first: <code>php bin/strategy.php generate --project <?=e($currentProject['name'] ?? 'name')?></code></p></div>
  <?php endif; ?>
 <?php endif; ?>
 
