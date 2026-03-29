@@ -189,6 +189,6 @@ class ProofreaderTest extends TestCase
     {
         $ref = new \ReflectionClass(Proofreader::class);
         $constant = $ref->getConstant('BATCH_SIZE');
-        $this->assertEquals(15, $constant);
+        $this->assertEquals(10, $constant);
     }
 }

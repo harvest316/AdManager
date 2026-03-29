@@ -26,7 +26,7 @@ class Proofreader
         $this->policiesDir = dirname(__DIR__, 2) . '/policies';
     }
 
-    private const BATCH_SIZE = 15;
+    private const BATCH_SIZE = 10;
 
     /**
      * Proofread a batch of copy items (auto-batches if > BATCH_SIZE).
@@ -127,6 +127,9 @@ class Proofreader
 
     /**
      * Load platform policy docs for the given platforms.
+     *
+     * Loads the quick-reference sections to keep prompt size manageable.
+     * Full policy docs are 3-4KB each; quick-ref is ~500 bytes.
      */
     private function loadPolicies(array $platforms): string
     {
@@ -135,14 +138,26 @@ class Proofreader
         if (in_array('google', $platforms)) {
             $path = $this->policiesDir . '/google-ads-content-policy.md';
             if (file_exists($path)) {
-                $sections[] = "### Google Ads Policies\n\n" . file_get_contents($path);
+                $content = file_get_contents($path);
+                // Extract from "## Editorial Standards" to end (most relevant for copy)
+                if (preg_match('/## Editorial Standards.*$/s', $content, $m)) {
+                    $sections[] = "### Google Ads Policies (Key Rules)\n\n" . $m[0];
+                } else {
+                    $sections[] = "### Google Ads Policies\n\n" . $content;
+                }
             }
         }
 
         if (in_array('meta', $platforms)) {
             $path = $this->policiesDir . '/meta-advertising-standards.md';
             if (file_exists($path)) {
-                $sections[] = "### Meta Advertising Standards\n\n" . file_get_contents($path);
+                $content = file_get_contents($path);
+                // Extract from "## Content-Specific Rules" to end (most relevant for copy)
+                if (preg_match('/## Content-Specific Rules.*$/s', $content, $m)) {
+                    $sections[] = "### Meta Advertising Standards (Key Rules)\n\n" . $m[0];
+                } else {
+                    $sections[] = "### Meta Advertising Standards\n\n" . $content;
+                }
             }
         }
 
