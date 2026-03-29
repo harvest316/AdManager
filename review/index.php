@@ -229,7 +229,6 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
       <button class="btn btn-a" onclick="act('approve',{asset_id:<?=$a['id']?>,project_id:<?=$projectId?>})">&#10003; Approve</button>
       <button class="btn btn-r" onclick="modal('reject',<?=$a['id']?>,<?=$projectId?>,'asset')">&#10007;</button>
       <button class="btn btn-f" onclick="modal('feedback',<?=$a['id']?>,<?=$projectId?>,'asset')">&#9998;</button>
-      <?php if(!$qa): ?><button class="btn btn-q btn-sm" onclick="runQA(<?=$a['id']?>,this)">QA</button><?php endif; ?>
      </div>
     </div>
    </div>

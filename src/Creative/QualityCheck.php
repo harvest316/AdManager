@@ -7,14 +7,12 @@ use AdManager\DB;
 /**
  * Computer-vision QA pre-filter for creative assets.
  *
- * Uses OpenRouter vision models to check images/videos before human review.
- * Checks: text legibility, brand consistency, ad policy compliance, AI artefacts,
- * correct dimensions, and overall quality.
+ * Uses Claude CLI with vision to check images/videos before human review.
+ * Runs automatically when assets are generated — not a manual step.
  */
 class QualityCheck
 {
-    private string $apiKey;
-    private string $model;
+    private string $claudeBin;
 
     private const PROMPT = <<<'PROMPT'
 You are a creative QA specialist reviewing an ad image/video frame for a paid media campaign.
@@ -41,18 +39,11 @@ PROMPT;
 
     public function __construct()
     {
-        $this->apiKey = $_ENV['OPENROUTER_API_KEY'] ?? getenv('OPENROUTER_API_KEY') ?: '';
-        if ($this->apiKey === '') {
-            throw new \RuntimeException('OPENROUTER_API_KEY is required for QA checks');
-        }
-        // Use a fast, cheap vision model for QA
-        $this->model = 'google/gemini-flash-1.5';
+        $this->claudeBin = getenv('CLAUDE_BIN') ?: '/home/jason/.local/bin/claude';
     }
 
     /**
      * Run QA check on an asset. Updates the DB with results.
-     *
-     * @return array{status: string, issues: array}
      */
     public function check(int $assetId): array
     {
@@ -66,7 +57,7 @@ PROMPT;
         }
 
         if ($asset['type'] === 'image') {
-            $result = $this->checkImage($asset['local_path']);
+            $result = $this->checkFile($asset['local_path']);
         } elseif ($asset['type'] === 'video') {
             $result = $this->checkVideoFrame($asset['local_path']);
         } else {
@@ -120,112 +111,121 @@ PROMPT;
         foreach ($assets as $asset) {
             echo "  Checking asset #{$asset['id']}...\n";
             $results[$asset['id']] = $this->check((int)$asset['id']);
-            usleep(500_000); // rate limit
         }
 
         return $results;
     }
 
-    private function checkImage(string $path): array
+    /**
+     * Check an image file using Claude CLI vision.
+     */
+    private function checkFile(string $path): array
     {
         if (!$path || !file_exists($path)) {
             return ['status' => 'warning', 'issues' => [
-                ['category' => 'quality', 'severity' => 'warning', 'description' => 'Image file not found at path']
+                ['category' => 'quality', 'severity' => 'warning', 'description' => 'File not found']
             ]];
         }
 
-        $imageData = base64_encode(file_get_contents($path));
-        $mimeType = mime_content_type($path) ?: 'image/png';
-
-        return $this->callVision($imageData, $mimeType);
+        return $this->callClaude($path);
     }
 
+    /**
+     * Extract a frame from video and check it.
+     */
     private function checkVideoFrame(string $path): array
     {
         if (!$path || !file_exists($path)) {
             return ['status' => 'warning', 'issues' => [
-                ['category' => 'quality', 'severity' => 'warning', 'description' => 'Video file not found at path']
+                ['category' => 'quality', 'severity' => 'warning', 'description' => 'Video file not found']
             ]];
         }
 
-        // Extract a frame at 1 second using ffmpeg
         $framePath = sys_get_temp_dir() . '/admanager_qa_frame_' . uniqid() . '.jpg';
         $ffmpeg = getenv('FFMPEG_PATH') ?: 'ffmpeg';
-        $cmd = sprintf(
+        exec(sprintf(
             '%s -i %s -ss 1 -frames:v 1 -q:v 2 %s -y 2>/dev/null',
-            escapeshellarg($ffmpeg),
-            escapeshellarg($path),
-            escapeshellarg($framePath)
-        );
-        exec($cmd, $output, $exitCode);
+            escapeshellarg($ffmpeg), escapeshellarg($path), escapeshellarg($framePath)
+        ), $output, $exitCode);
 
         if ($exitCode !== 0 || !file_exists($framePath)) {
             return ['status' => 'warning', 'issues' => [
-                ['category' => 'quality', 'severity' => 'warning', 'description' => 'Could not extract video frame for QA']
+                ['category' => 'quality', 'severity' => 'warning', 'description' => 'Could not extract video frame']
             ]];
         }
 
-        $imageData = base64_encode(file_get_contents($framePath));
-        $result = $this->callVision($imageData, 'image/jpeg');
+        $result = $this->callClaude($framePath);
         @unlink($framePath);
-
         return $result;
     }
 
-    private function callVision(string $base64Image, string $mimeType): array
+    /**
+     * Shell out to Claude CLI with an image file for vision QA.
+     */
+    private function callClaude(string $imagePath): array
     {
-        $payload = [
-            'model'    => $this->model,
-            'messages' => [
-                [
-                    'role'    => 'user',
-                    'content' => [
-                        ['type' => 'text', 'text' => self::PROMPT],
-                        ['type' => 'image_url', 'image_url' => [
-                            'url' => "data:{$mimeType};base64,{$base64Image}",
-                        ]],
-                    ],
-                ],
-            ],
-            'max_tokens'  => 500,
-            'temperature' => 0,
+        $prompt = escapeshellarg(self::PROMPT);
+        $path = escapeshellarg($imagePath);
+
+        // Claude CLI accepts image files directly with the prompt
+        $cmd = "{$this->claudeBin} -p {$prompt} --model haiku --output-format text {$path}";
+
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
         ];
 
-        $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => json_encode($payload),
-            CURLOPT_HTTPHEADER     => [
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $this->apiKey,
-            ],
-            CURLOPT_TIMEOUT => 30,
-        ]);
-
-        $body = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode < 200 || $httpCode >= 300 || !$body) {
+        $process = proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($process)) {
             return ['status' => 'warning', 'issues' => [
-                ['category' => 'quality', 'severity' => 'warning', 'description' => "Vision API error (HTTP {$httpCode})"]
+                ['category' => 'quality', 'severity' => 'warning', 'description' => 'Failed to start Claude CLI']
             ]];
         }
 
-        $response = json_decode($body, true);
-        $content = $response['choices'][0]['message']['content'] ?? '';
+        fclose($pipes[0]);
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
 
-        // Strip markdown fencing if present
-        $content = preg_replace('/^```json?\s*/i', '', $content);
-        $content = preg_replace('/\s*```\s*$/', '', $content);
-        $content = trim($content);
+        $stdout = '';
+        $startTime = time();
+        $timeout = 60;
 
-        $result = json_decode($content, true);
+        while (true) {
+            $status = proc_get_status($process);
+            $out = stream_get_contents($pipes[1]);
+            if ($out) $stdout .= $out;
+            if (!$status['running']) break;
+            if ((time() - $startTime) > $timeout) {
+                proc_terminate($process);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                proc_close($process);
+                return ['status' => 'warning', 'issues' => [
+                    ['category' => 'quality', 'severity' => 'warning', 'description' => 'Claude CLI timed out']
+                ]];
+            }
+            usleep(100_000);
+        }
+
+        $out = stream_get_contents($pipes[1]);
+        if ($out) $stdout .= $out;
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        $stdout = trim($stdout);
+
+        // Strip markdown fencing
+        $stdout = preg_replace('/^```json?\s*/i', '', $stdout);
+        $stdout = preg_replace('/\s*```\s*$/', '', $stdout);
+        $stdout = trim($stdout);
+
+        $result = json_decode($stdout, true);
 
         if (!is_array($result) || !isset($result['status'])) {
             return ['status' => 'warning', 'issues' => [
-                ['category' => 'quality', 'severity' => 'warning', 'description' => 'Could not parse vision model response']
+                ['category' => 'quality', 'severity' => 'warning', 'description' => 'Could not parse Claude response']
             ]];
         }
 
