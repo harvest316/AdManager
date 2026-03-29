@@ -59,14 +59,13 @@ class ImageGen
             $response = $this->callOpenRouter($model, $messages);
 
             $message = $response['choices'][0]['message'] ?? [];
-            $content = $message['content'] ?? '';
             $imageData = '';
 
-            // Gemini image models return content as an array of parts
-            if (is_array($content)) {
-                foreach ($content as $part) {
-                    if (isset($part['type']) && $part['type'] === 'image_url' && isset($part['image_url']['url'])) {
-                        $dataUrl = $part['image_url']['url'];
+            // Gemini image models return images in message.images[] array
+            if (!empty($message['images'])) {
+                foreach ($message['images'] as $img) {
+                    if (isset($img['image_url']['url'])) {
+                        $dataUrl = $img['image_url']['url'];
                         if (preg_match('#^data:image/[a-z]+;base64,(.+)$#s', $dataUrl, $m)) {
                             $imageData = base64_decode($m[1], true);
                             break;
@@ -75,19 +74,8 @@ class ImageGen
                 }
             }
 
-            // Fallback: content might be a plain base64 string or data URL
-            if (!$imageData && is_string($content)) {
-                $content = preg_replace('/^```[a-z]*\s*/i', '', $content);
-                $content = preg_replace('/\s*```\s*$/', '', $content);
-                $content = preg_replace('/^data:image\/[a-z]+;base64,/i', '', $content);
-                $content = trim($content);
-                if ($content !== '') {
-                    $imageData = base64_decode($content, true);
-                }
-            }
-
             if (!$imageData) {
-                throw new \RuntimeException('Failed to extract image data from model response');
+                throw new \RuntimeException('No image returned by model — check prompt or try again');
             }
         } else {
             // FLUX production model — image generation via chat completions
