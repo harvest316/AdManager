@@ -18,6 +18,12 @@ if (!$projectId && count($projects) > 0) $projectId = (int)$projects[0]['id'];
 $assets = $projectId ? $store->listByProject($projectId, $statusFilter) : [];
 $allAssets = $projectId ? $store->listByProject($projectId) : [];
 $pendingCampaigns = $projectId ? $store->getPendingCampaigns($projectId) : [];
+$allCampaigns = [];
+if ($projectId) {
+    $cs = DB::get()->prepare('SELECT * FROM campaigns WHERE project_id = ? ORDER BY platform, name');
+    $cs->execute([$projectId]);
+    $allCampaigns = $cs->fetchAll();
+}
 
 $adCopy = [];
 $copyCounts = [];
@@ -99,8 +105,11 @@ select{background:var(--bg3);color:var(--t1);border:1px solid var(--border);bord
 @media(max-width:1100px){.grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.grid{grid-template-columns:1fr}}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;transition:border-color .15s,box-shadow .15s}
 .card:hover{border-color:var(--blue);box-shadow:0 4px 12px rgba(0,0,0,.3)}
-.prev{position:relative;width:100%;height:200px;background:var(--bg3);display:flex;align-items:center;justify-content:center;overflow:hidden}
-.prev img,.prev video{width:100%;height:100%;object-fit:cover}
+.prev{position:relative;width:100%;min-height:120px;max-height:400px;background:var(--bg3);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.prev img,.prev video{width:100%;height:auto;max-height:400px;object-fit:contain}
+.editable-budget{cursor:pointer;border-bottom:1px dashed var(--t3);transition:border-color .15s}
+.editable-budget:hover{border-color:var(--blue)}
+.budget-input{background:var(--bg3);color:var(--t1);border:1px solid var(--blue);border-radius:4px;padding:4px 8px;font-size:inherit;font-weight:inherit;width:100px;text-align:right}
 .badge-tl{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.7);color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .badge-tr{position:absolute;top:10px;right:10px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .badge-bl{position:absolute;bottom:8px;left:10px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
@@ -265,27 +274,50 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
  <?php endif; ?>
 
 <?php elseif($tab==='campaigns'): ?>
- <?php if(!empty($pendingCampaigns)): ?>
-  <div class="sec"><div class="sec-t">Pending Campaigns <span class="bg"><?=count($pendingCampaigns)?></span></div>
-  <table class="ct"><thead><tr><th>Campaign</th><th>Platform</th><th>Type</th><th>Budget</th><th>Created</th><th>Action</th></tr></thead><tbody>
-   <?php foreach($pendingCampaigns as $c): ?>
-   <tr><td><strong><?=e($c['name'])?></strong><?php if(!empty($c['external_id'])): ?><br><span style="color:var(--t3);font-size:11px"><?=e($c['external_id'])?></span><?php endif; ?></td>
-   <td><span class="pb pb-<?=strtolower($c['platform'])?>"><?=e($c['platform'])?></span></td>
-   <td><?=e($c['type'])?></td>
-   <td><?=!empty($c['daily_budget_aud'])?'$'.number_format((float)$c['daily_budget_aud'],2).'/day':'<span style="color:var(--t3)">-</span>'?></td>
-   <td style="color:var(--t3)"><?=timeAgo($c['created_at'])?></td>
-   <td><button class="btn btn-e" onclick="act('enable_campaign',{campaign_id:<?=$c['id']?>,project_id:<?=$projectId?>})">Enable</button></td></tr>
-   <?php endforeach; ?>
-  </tbody></table></div>
+ <?php $td=array_sum(array_column($budgets,'daily_budget_aud')); ?>
+
+ <!-- Budget Overview — editable -->
+ <div class="sec"><div class="sec-t">Budget</div>
+ <div class="bgrid">
+  <?php foreach($budgets as $b): $plat=strtolower($b['platform']); ?>
+  <div class="bcard">
+   <div class="pf" style="color:<?=$plat==='google'?'var(--green)':'var(--blue)'?>"><?=e($b['platform'])?></div>
+   <div class="am"><span class="editable-budget" data-type="platform" data-platform="<?=e($b['platform'])?>" data-daily="<?=$b['daily_budget_aud']?>">$<?=number_format((float)$b['daily_budget_aud'],2)?></span></div>
+   <div class="lb">AUD / day (~$<?=number_format($b['daily_budget_aud']*30.4,0)?>/mo)</div>
+  </div>
+  <?php endforeach; ?>
+  <div class="bcard" style="border-color:var(--blue)">
+   <div class="pf" style="color:var(--blue)">Total</div>
+   <div class="am"><span class="editable-budget" data-type="total" data-daily="<?=$td?>">$<?=number_format($td,2)?></span></div>
+   <div class="lb">AUD / day (~$<?=number_format($td*30.4,0)?>/mo)</div>
+  </div>
+ </div>
+ <p style="font-size:11px;color:var(--t3);margin-top:8px">Click any amount to edit. Changing platform or total budgets proportionally adjusts campaign budgets.</p>
+ </div>
+
+ <!-- All Campaigns -->
+ <?php if(!empty($allCampaigns)): ?>
+ <?php
+   $byPlatform = [];
+   foreach ($allCampaigns as $c) $byPlatform[$c['platform']][] = $c;
+ ?>
+ <?php foreach($byPlatform as $plat => $camps): ?>
+ <div class="sec"><div class="sec-t"><span class="pb pb-<?=$plat?>"><?=e($plat)?></span> Campaigns <span class="bg"><?=count($camps)?></span></div>
+ <table class="ct"><thead><tr><th>Campaign</th><th>Type</th><th>Daily</th><th>Monthly</th><th>Status</th><th>Action</th></tr></thead><tbody>
+  <?php foreach($camps as $c): $daily=(float)$c['daily_budget_aud']; $statusColor=$c['status']==='paused'?'var(--orange)':($c['status']==='active'?'var(--green)':'var(--t3)'); ?>
+  <tr>
+   <td><strong><?=e($c['name'])?></strong><?php if(!empty($c['external_id'])): ?><br><span style="color:var(--t3);font-size:11px"><?=e($c['external_id'])?></span><?php endif; ?></td>
+   <td style="color:var(--t2)"><?=e($c['type'])?></td>
+   <td><span class="editable-budget" data-type="campaign" data-campaign-id="<?=$c['id']?>" data-daily="<?=$daily?>">$<?=number_format($daily,2)?></span></td>
+   <td style="color:var(--t2)">$<?=number_format($daily*30.4,0)?></td>
+   <td><span style="color:<?=$statusColor?>;font-weight:600;font-size:12px;text-transform:uppercase"><?=e($c['status'])?></span></td>
+   <td><?php if($c['status']==='draft'||$c['status']==='paused'): ?><button class="btn btn-e btn-sm" onclick="act('enable_campaign',{campaign_id:<?=$c['id']?>,project_id:<?=$projectId?>})">Enable</button><?php endif; ?></td>
+  </tr>
+  <?php endforeach; ?>
+ </tbody></table></div>
+ <?php endforeach; ?>
  <?php else: ?>
-  <div class="empty"><div class="ic">&#128640;</div><h3>No pending campaigns</h3></div>
- <?php endif; ?>
- <?php if(!empty($budgets)): ?>
-  <div class="sec"><div class="sec-t">Budget Overview</div>
-  <div class="bgrid">
-   <?php foreach($budgets as $b): ?><div class="bcard"><div class="pf" style="color:<?=strtolower($b['platform'])==='google'?'var(--green)':'var(--blue)'?>"><?=e($b['platform'])?></div><div class="am">$<?=number_format((float)$b['daily_budget_aud'],2)?></div><div class="lb">AUD / day</div></div><?php endforeach; ?>
-   <?php $td=array_sum(array_column($budgets,'daily_budget_aud')); ?><div class="bcard" style="border-color:var(--blue)"><div class="pf" style="color:var(--blue)">Total</div><div class="am">$<?=number_format($td,2)?></div><div class="lb">AUD / day (~$<?=number_format($td*30.4,0)?>/mo)</div></div>
-  </div></div>
+  <div class="empty"><div class="ic">&#128640;</div><h3>No campaigns</h3><p>Create campaigns with the strategy or CLI tools.</p></div>
  <?php endif; ?>
 <?php endif; ?>
 
@@ -313,5 +345,39 @@ function cls(id){document.getElementById(id).classList.remove('on')}
 function sub(t){var p=t==='reject'?'r':'f';var id=document.getElementById(p+'Id').value;var pid=document.getElementById(p+'Pid').value;var itype=document.getElementById(p+'Type').value;var txt=document.getElementById(p+'Txt').value;if(!txt.trim())return false;var a=t+(itype==='copy'?'_copy':'');var d={project_id:pid};d[itype==='copy'?'copy_id':'asset_id']=id;d[t==='reject'?'reason':'feedback']=txt;act(a,d);cls(p+'M');return false}
 document.querySelectorAll('.mo').forEach(function(o){o.addEventListener('click',function(e){if(e.target===o)o.classList.remove('on')})});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')document.querySelectorAll('.mo.on').forEach(function(m){m.classList.remove('on')})});
+
+// Inline budget editing
+document.querySelectorAll('.editable-budget').forEach(function(el){
+el.addEventListener('click',function(){
+  if(el.querySelector('input'))return;
+  var daily=parseFloat(el.dataset.daily);
+  var monthly=Math.round(daily*30.4);
+  var inp=document.createElement('input');
+  inp.type='number';inp.step='0.01';inp.min='0';inp.className='budget-input';
+  // Ask: edit daily or monthly?
+  var mode=prompt('Edit daily or monthly? (d/m)','d');
+  if(!mode)return;
+  var isMonthly=mode.toLowerCase().startsWith('m');
+  inp.value=isMonthly?monthly.toFixed(0):daily.toFixed(2);
+  inp.placeholder=isMonthly?'$/month':'$/day';
+  el.textContent='';el.appendChild(inp);inp.focus();inp.select();
+  function save(){
+    var val=parseFloat(inp.value);if(isNaN(val)||val<0){el.textContent='$'+daily.toFixed(2);return}
+    var newDaily=isMonthly?val/30.4:val;
+    var type=el.dataset.type;
+    var d={project_id:<?=$projectId?>,daily_budget:newDaily.toFixed(2)};
+    if(type==='campaign'){d.campaign_id=el.dataset.campaignId;d.action='update_campaign_budget'}
+    else if(type==='platform'){d.platform=el.dataset.platform;d.action='update_platform_budget'}
+    else{d.action='update_total_budget'}
+    var f=new FormData;for(var k in d)f.append(k,d[k]);
+    fetch('api.php',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:f})
+    .then(function(r){return r.json()})
+    .then(function(j){if(j.ok){if(type!=='campaign')location.reload();else{el.dataset.daily=newDaily;el.textContent='$'+newDaily.toFixed(2);var monthTd=el.closest('tr').querySelectorAll('td')[3];if(monthTd)monthTd.textContent='$'+Math.round(newDaily*30.4)}}else toast(j.error||'Failed','e')})
+    .catch(function(){toast('Network error','e')});
+  }
+  inp.addEventListener('blur',save);
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();inp.blur()}if(e.key==='Escape'){el.textContent='$'+daily.toFixed(2)}});
+});
+});
 </script>
 </body></html>

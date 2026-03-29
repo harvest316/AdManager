@@ -54,6 +54,61 @@ try {
             $result['ok'] = true;
             break;
 
+        // Budget management
+        case 'update_campaign_budget':
+            $campaignId = (int)$_POST['campaign_id'];
+            $daily = (float)$_POST['daily_budget'];
+            if ($daily < 0) throw new \RuntimeException('Budget cannot be negative');
+            $db->prepare('UPDATE campaigns SET daily_budget_aud = ? WHERE id = ?')
+               ->execute([round($daily, 2), $campaignId]);
+            break;
+
+        case 'update_platform_budget':
+            $platform = $_POST['platform'] ?? '';
+            $daily = (float)$_POST['daily_budget'];
+            if ($daily < 0) throw new \RuntimeException('Budget cannot be negative');
+            if (!in_array($platform, ['google', 'meta'])) throw new \RuntimeException('Invalid platform');
+            $db->prepare('UPDATE budgets SET daily_budget_aud = ?, updated_at = datetime("now") WHERE project_id = ? AND platform = ?')
+               ->execute([round($daily, 2), $projectId, $platform]);
+            // Proportionally adjust campaigns on this platform
+            $camps = $db->prepare('SELECT id, daily_budget_aud FROM campaigns WHERE project_id = ? AND platform = ?');
+            $camps->execute([$projectId, $platform]);
+            $rows = $camps->fetchAll();
+            $oldTotal = array_sum(array_column($rows, 'daily_budget_aud'));
+            if ($oldTotal > 0) {
+                $ratio = $daily / $oldTotal;
+                foreach ($rows as $r) {
+                    $db->prepare('UPDATE campaigns SET daily_budget_aud = ? WHERE id = ?')
+                       ->execute([round($r['daily_budget_aud'] * $ratio, 2), $r['id']]);
+                }
+            }
+            break;
+
+        case 'update_total_budget':
+            $daily = (float)$_POST['daily_budget'];
+            if ($daily < 0) throw new \RuntimeException('Budget cannot be negative');
+            // Get current totals per platform
+            $bs = $db->prepare('SELECT id, platform, daily_budget_aud FROM budgets WHERE project_id = ?');
+            $bs->execute([$projectId]);
+            $budgetRows = $bs->fetchAll();
+            $oldTotal = array_sum(array_column($budgetRows, 'daily_budget_aud'));
+            if ($oldTotal > 0) {
+                $ratio = $daily / $oldTotal;
+                foreach ($budgetRows as $b) {
+                    $newPlatBudget = round($b['daily_budget_aud'] * $ratio, 2);
+                    $db->prepare('UPDATE budgets SET daily_budget_aud = ?, updated_at = datetime("now") WHERE id = ?')
+                       ->execute([$newPlatBudget, $b['id']]);
+                    // Also scale campaigns on this platform
+                    $camps = $db->prepare('SELECT id, daily_budget_aud FROM campaigns WHERE project_id = ? AND platform = ?');
+                    $camps->execute([$projectId, $b['platform']]);
+                    foreach ($camps->fetchAll() as $c) {
+                        $db->prepare('UPDATE campaigns SET daily_budget_aud = ? WHERE id = ?')
+                           ->execute([round($c['daily_budget_aud'] * $ratio, 2), $c['id']]);
+                    }
+                }
+            }
+            break;
+
         default:
             $result = ['ok' => false, 'error' => 'Unknown action'];
     }
