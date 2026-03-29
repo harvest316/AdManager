@@ -51,6 +51,22 @@ if ($projectId) {
     $budgets = $bs->fetchAll();
 }
 
+$strategies = [];
+$currentStrategy = null;
+if ($projectId) {
+    $ss = DB::get()->prepare('SELECT id, name, platform, campaign_type, model, created_at FROM strategies WHERE project_id = ? ORDER BY created_at DESC');
+    $ss->execute([$projectId]);
+    $strategies = $ss->fetchAll();
+    if ($tab === 'strategy') {
+        $stratId = isset($_GET['strategy_id']) ? (int)$_GET['strategy_id'] : ($strategies[0]['id'] ?? null);
+        if ($stratId) {
+            $sStmt = DB::get()->prepare('SELECT * FROM strategies WHERE id = ?');
+            $sStmt->execute([$stratId]);
+            $currentStrategy = $sStmt->fetch();
+        }
+    }
+}
+
 $currentProject = null;
 foreach ($projects as $p) { if ((int)$p['id'] === $projectId) { $currentProject = $p; break; } }
 
@@ -210,6 +226,7 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
  <a href="?project=<?=$projectId?>&tab=creative" class="tab <?=$tab==='creative'?'active':''?>">Creative<span class="ct"><?=count($allAssets)?></span></a>
  <a href="?project=<?=$projectId?>&tab=copy" class="tab <?=$tab==='copy'?'active':''?>">Ad Copy<span class="ct"><?=array_sum($copyCounts)?></span></a>
  <a href="?project=<?=$projectId?>&tab=campaigns" class="tab <?=$tab==='campaigns'?'active':''?>">Campaigns<span class="ct"><?=count($pendingCampaigns)?></span></a>
+ <a href="?project=<?=$projectId?>&tab=strategy" class="tab <?=$tab==='strategy'?'active':''?>">Strategy<span class="ct"><?=count($strategies)?></span></a>
 </div>
 <?php if($tab!=='campaigns'): ?>
 <?php $langParam = $langFilter ? '&lang='.e($langFilter) : ''; ?>

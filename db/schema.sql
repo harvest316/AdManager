@@ -208,3 +208,74 @@ CREATE INDEX IF NOT EXISTS idx_ad_copy_strategy ON ad_copy(strategy_id);
 CREATE INDEX IF NOT EXISTS idx_ad_copy_status ON ad_copy(status);
 CREATE INDEX IF NOT EXISTS idx_ad_copy_platform ON ad_copy(platform);
 CREATE INDEX IF NOT EXISTS idx_ad_copy_type ON ad_copy(copy_type);
+
+-- Dashboard tables (DR-109)
+
+CREATE TABLE IF NOT EXISTS changelog (
+  id INTEGER PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  category TEXT NOT NULL,        -- split_test | budget | creative | keyword | campaign | strategy | system | manual
+  action TEXT NOT NULL,          -- concluded | reallocated | fatigue_detected | added | removed | paused | enabled | approved | rejected | synced | note
+  summary TEXT NOT NULL,         -- Human-readable sentence, self-explanatory months later
+  detail_json TEXT,              -- Structured data for programmatic consumption (JSON)
+  entity_type TEXT,              -- campaign | ad_group | ad | keyword | split_test | strategy | NULL
+  entity_id INTEGER,             -- FK to the relevant entity (or NULL for project-wide events)
+  actor TEXT DEFAULT 'system',   -- system | admin | optimiser | proofreader
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_changelog_project ON changelog(project_id);
+CREATE INDEX IF NOT EXISTS idx_changelog_category ON changelog(category);
+CREATE INDEX IF NOT EXISTS idx_changelog_entity ON changelog(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_changelog_created ON changelog(created_at);
+
+CREATE TABLE IF NOT EXISTS strategy_annotations (
+  id INTEGER PRIMARY KEY,
+  strategy_id INTEGER NOT NULL REFERENCES strategies(id),
+  section_anchor TEXT NOT NULL,   -- First 60 chars of nearest ## or ### header
+  comment TEXT NOT NULL,
+  status TEXT DEFAULT 'open',     -- open | resolved | wont_fix
+  created_at TEXT DEFAULT (datetime('now')),
+  resolved_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_annotations_strategy ON strategy_annotations(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_annotations_status ON strategy_annotations(status);
+
+CREATE TABLE IF NOT EXISTS sync_jobs (
+  id INTEGER PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  platform TEXT NOT NULL,          -- google | meta | all
+  days INTEGER DEFAULT 7,
+  status TEXT DEFAULT 'pending',   -- pending | running | complete | failed
+  output TEXT,                     -- Captured stdout/stderr from sync-performance.php
+  started_at TEXT,
+  completed_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_project ON sync_jobs(project_id);
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_status ON sync_jobs(status);
+
+CREATE TABLE IF NOT EXISTS search_terms (
+  id INTEGER PRIMARY KEY,
+  project_id INTEGER NOT NULL,
+  campaign_id INTEGER,
+  ad_group_id INTEGER,
+  search_term TEXT NOT NULL,
+  match_type TEXT,
+  impressions INTEGER DEFAULT 0,
+  clicks INTEGER DEFAULT 0,
+  cost_micros INTEGER DEFAULT 0,
+  conversions REAL DEFAULT 0,
+  conversion_value REAL DEFAULT 0,
+  date TEXT NOT NULL,
+  synced_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(ad_group_id, search_term, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_search_terms_project ON search_terms(project_id);
+CREATE INDEX IF NOT EXISTS idx_search_terms_campaign ON search_terms(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_search_terms_ad_group ON search_terms(ad_group_id);
+CREATE INDEX IF NOT EXISTS idx_search_terms_date ON search_terms(date);
+CREATE INDEX IF NOT EXISTS idx_search_terms_term ON search_terms(search_term);

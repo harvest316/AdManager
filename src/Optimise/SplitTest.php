@@ -3,6 +3,8 @@
 namespace AdManager\Optimise;
 
 use AdManager\DB;
+use AdManager\Google\Ads\ResponsiveSearch;
+use AdManager\Meta\Ad as MetaAd;
 
 class SplitTest
 {
@@ -165,6 +167,87 @@ class SplitTest
              WHERE id = ?'
         );
         $stmt->execute([$winnerAdId, $splitTestId]);
+    }
+
+    /**
+     * Execute the conclusion of a split test: mark the split test as concluded
+     * and pause all losing ad variants (both in the DB and on the platform).
+     *
+     * @return array{paused: int[], errors: string[]}
+     */
+    public function executeConclusion(int $splitTestId): array
+    {
+        $db = DB::get();
+
+        // Load the split test
+        $testStmt = $db->prepare('SELECT * FROM split_tests WHERE id = ?');
+        $testStmt->execute([$splitTestId]);
+        $test = $testStmt->fetch();
+
+        if (!$test) {
+            return ['paused' => [], 'errors' => ["Split test {$splitTestId} not found"]];
+        }
+
+        $winnerAdId = (int) $test['winner_ad_id'];
+
+        if (!$winnerAdId) {
+            return ['paused' => [], 'errors' => ["Split test {$splitTestId} has no declared winner"]];
+        }
+
+        // Find all non-winner, non-removed ads in the ad group
+        $adsStmt = $db->prepare(
+            "SELECT id, external_id FROM ads
+             WHERE ad_group_id = ? AND status != 'removed' AND id != ?"
+        );
+        $adsStmt->execute([$test['ad_group_id'], $winnerAdId]);
+        $losingAds = $adsStmt->fetchAll();
+
+        $paused = [];
+        $errors = [];
+
+        // Determine platform from the campaign
+        $campaignStmt = $db->prepare('SELECT platform FROM campaigns WHERE id = ?');
+        $campaignStmt->execute([$test['campaign_id']]);
+        $campaign = $campaignStmt->fetch();
+        $platform = $campaign ? $campaign['platform'] : null;
+
+        foreach ($losingAds as $ad) {
+            $adId = (int) $ad['id'];
+            $externalId = $ad['external_id'] ?? null;
+
+            // Pause in DB
+            $pauseStmt = $db->prepare("UPDATE ads SET status = 'paused' WHERE id = ?");
+            $pauseStmt->execute([$adId]);
+
+            // Pause on platform if we have an external ID
+            if ($externalId) {
+                try {
+                    if ($platform === 'google') {
+                        $rsa = new ResponsiveSearch();
+                        $rsa->pause($externalId);
+                    } elseif ($platform === 'meta') {
+                        $metaAd = new MetaAd();
+                        $metaAd->pause($externalId);
+                    }
+                } catch (\Throwable $e) {
+                    $errors[] = "Failed to pause ad {$adId} (external: {$externalId}) on {$platform}: {$e->getMessage()}";
+                    // DB is already paused — platform sync failure is non-fatal
+                }
+            }
+
+            $paused[] = $adId;
+        }
+
+        error_log(sprintf(
+            '[SplitTest] Concluded test %d (winner: ad %d). Paused %d losing ad(s): [%s]%s',
+            $splitTestId,
+            $winnerAdId,
+            count($paused),
+            implode(', ', $paused),
+            $errors ? ' Errors: ' . implode('; ', $errors) : ''
+        ));
+
+        return ['paused' => $paused, 'errors' => $errors];
     }
 
     /**

@@ -270,6 +270,101 @@ class SplitTestTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // executeConclusion()
+    // -------------------------------------------------------------------------
+
+    public function testExecuteConclusionPausesLosingAdsInDb(): void
+    {
+        // Conclude with ad 10 as winner, so ad 11 should be paused
+        $id = $this->splitTest->create(1, 1, 1, 'Auto-Pause Test');
+        $this->splitTest->conclude($id, 10);
+
+        $result = $this->splitTest->executeConclusion($id);
+
+        // Ad 11 is the loser
+        $this->assertContains(11, $result['paused']);
+        $this->assertNotContains(10, $result['paused']);
+
+        // Verify DB status
+        $row = $this->db->query("SELECT status FROM ads WHERE id = 11")->fetch();
+        $this->assertSame('paused', $row['status']);
+
+        // Winner should remain enabled
+        $winnerRow = $this->db->query("SELECT status FROM ads WHERE id = 10")->fetch();
+        $this->assertSame('enabled', $winnerRow['status']);
+    }
+
+    public function testExecuteConclusionDoesNotPauseRemovedAds(): void
+    {
+        // Add a third ad that is already removed
+        $this->db->exec(
+            "INSERT INTO ads (id, ad_group_id, type, status) VALUES (12, 1, 'rsa', 'removed')"
+        );
+
+        $id = $this->splitTest->create(1, 1, 1, 'Removed Ad Test');
+        $this->splitTest->conclude($id, 10);
+
+        $result = $this->splitTest->executeConclusion($id);
+
+        // Removed ad should not appear in paused list
+        $this->assertNotContains(12, $result['paused']);
+        $this->assertContains(11, $result['paused']);
+    }
+
+    public function testExecuteConclusionReturnsErrorForMissingTest(): void
+    {
+        $result = $this->splitTest->executeConclusion(9999);
+
+        $this->assertSame([], $result['paused']);
+        $this->assertNotEmpty($result['errors']);
+        $this->assertStringContainsString('not found', $result['errors'][0]);
+    }
+
+    public function testExecuteConclusionReturnsErrorWhenNoWinnerSet(): void
+    {
+        // Create a test but do not call conclude() — no winner_ad_id
+        $id = $this->splitTest->create(1, 1, 1, 'No Winner Test');
+
+        $result = $this->splitTest->executeConclusion($id);
+
+        $this->assertSame([], $result['paused']);
+        $this->assertNotEmpty($result['errors']);
+        $this->assertStringContainsString('no declared winner', $result['errors'][0]);
+    }
+
+    public function testExecuteConclusionSkipsPlatformCallForAdsWithoutExternalId(): void
+    {
+        // Ads without external_id should still be DB-paused without error
+        $id = $this->splitTest->create(1, 1, 1, 'No External ID Test');
+        $this->splitTest->conclude($id, 10);
+
+        $result = $this->splitTest->executeConclusion($id);
+
+        // Ad 11 has no external_id — no platform call attempted, no error
+        $this->assertContains(11, $result['paused']);
+        $this->assertSame([], $result['errors']);
+    }
+
+    public function testExecuteConclusionCapturesErrorsFromPlatformCall(): void
+    {
+        // Give ad 11 a fake external_id so a platform call is attempted
+        $this->db->exec("UPDATE ads SET external_id = 'fake-resource-name' WHERE id = 11");
+        // Campaign platform is 'google' — the Google API call will throw
+        $id = $this->splitTest->create(1, 1, 1, 'Platform Error Test');
+        $this->splitTest->conclude($id, 10);
+
+        $result = $this->splitTest->executeConclusion($id);
+
+        // Ad should still be paused in DB even though platform call failed
+        $this->assertContains(11, $result['paused']);
+        $row = $this->db->query("SELECT status FROM ads WHERE id = 11")->fetch();
+        $this->assertSame('paused', $row['status']);
+
+        // Platform error should be captured, not thrown
+        $this->assertNotEmpty($result['errors']);
+    }
+
+    // -------------------------------------------------------------------------
     // listActive() / listAll()
     // -------------------------------------------------------------------------
 

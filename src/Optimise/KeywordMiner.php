@@ -7,107 +7,189 @@ use RuntimeException;
 
 class KeywordMiner
 {
-    private float $highCtrThreshold = 3.0;   // % — terms with CTR above this are candidates
-    private float $lowCtrThreshold  = 0.5;   // % — terms with CTR below this are negative candidates
-    private float $highSpendFactor  = 2.0;   // cost above 2x average with no conversions = negative candidate
-    private int   $minImpressions   = 10;    // ignore terms with fewer impressions
+    private float $highCtrThreshold  = 3.0;   // % — terms with CTR above this are keyword candidates
+    private float $lowCtrThreshold   = 1.0;   // % — terms with CTR below this are negative candidates
+    private float $negativeCtrCap    = 0.5;   // % — suggestNegatives() hard cap
+    private int   $minImpressions    = 10;    // ignore terms with fewer impressions
+    private int   $negativeMinImpr   = 100;   // suggestNegatives() minimum impressions
+    private float $highSpendThreshold = 5.0;  // USD — suggestNegatives() spend threshold
 
     /**
      * Mine search terms for keyword and negative keyword candidates.
      *
-     * @return array{add_keywords: array, add_negatives: array}
+     * Queries the search_terms table (populated by bin/sync-search-terms.php).
+     *
+     * Three candidate types are returned:
+     *   - add_keywords:   high-CTR terms (>3%) with sufficient impressions
+     *   - add_negatives:  low-CTR terms (<1%) with sufficient impressions
+     *   - expansion:      terms with conversions > 0 not already in the keywords table
+     *
+     * @return array{add_keywords: array, add_negatives: array, expansion: array, total_terms: int}
      */
     public function mineSearchTerms(int $projectId): array
     {
         $db = DB::get();
 
-        // Get search term performance data from the performance table
-        // We look at ad-level performance and join to get keyword context
+        // Fetch search term rows with sufficient impressions for this project
         $stmt = $db->prepare(
             'SELECT
-                p.ad_id,
-                p.ad_group_id,
-                p.campaign_id,
-                SUM(p.impressions) AS impressions,
-                SUM(p.clicks) AS clicks,
-                SUM(p.cost_micros) AS cost_micros,
-                SUM(p.conversions) AS conversions,
-                SUM(p.conversion_value) AS conversion_value
-             FROM performance p
-             JOIN campaigns c ON c.id = p.campaign_id
-             WHERE c.project_id = ?
-             GROUP BY p.ad_group_id
-             HAVING SUM(p.impressions) - ? >= 0'
+                st.search_term,
+                st.match_type,
+                st.ad_group_id,
+                st.campaign_id,
+                SUM(st.impressions)       AS impressions,
+                SUM(st.clicks)            AS clicks,
+                SUM(st.cost_micros)       AS cost_micros,
+                SUM(st.conversions)       AS conversions,
+                SUM(st.conversion_value)  AS conversion_value
+             FROM search_terms st
+             WHERE st.project_id = ?
+             GROUP BY st.ad_group_id, st.search_term
+             HAVING impressions >= ?'
         );
         $stmt->execute([$projectId, $this->minImpressions]);
         $termData = $stmt->fetchAll();
 
-        // Get existing keywords for comparison
+        // Load existing (non-negative) keyword texts for expansion comparison
         $kwStmt = $db->prepare(
-            'SELECT k.keyword, k.match_type, k.is_negative, k.ad_group_id
+            'SELECT k.keyword
              FROM keywords k
              JOIN campaigns c ON c.id = k.campaign_id
-             WHERE c.project_id = ?'
+             WHERE c.project_id = ? AND k.is_negative = 0'
         );
         $kwStmt->execute([$projectId]);
-        $existingKeywords = $kwStmt->fetchAll();
-
         $existingTerms = array_map(
             fn($kw) => strtolower($kw['keyword']),
-            $existingKeywords
+            $kwStmt->fetchAll()
         );
 
-        // Calculate average cost per ad group
-        $totalCost = array_sum(array_column($termData, 'cost_micros'));
-        $avgCostPerGroup = count($termData) > 0 ? $totalCost / count($termData) : 0;
-
-        $addKeywords = [];
+        $addKeywords  = [];
         $addNegatives = [];
+        $expansion    = [];
 
         foreach ($termData as $term) {
-            $impressions = (int) $term['impressions'];
-            $clicks = (int) $term['clicks'];
-            $costMicros = (int) $term['cost_micros'];
+            $impressions = (int)   $term['impressions'];
+            $clicks      = (int)   $term['clicks'];
+            $costMicros  = (int)   $term['cost_micros'];
             $conversions = (float) $term['conversions'];
-            $cost = $costMicros / 1_000_000;
-            $ctr = $impressions > 0 ? ($clicks / $impressions) * 100 : 0;
+            $cost        = $costMicros / 1_000_000;
+            $ctr         = $impressions > 0 ? ($clicks / $impressions) * 100 : 0.0;
+            $searchText  = $term['search_term'];
 
-            // High-CTR terms with conversions — potential positive keywords
-            if ($ctr >= $this->highCtrThreshold && $conversions > 0) {
-                $addKeywords[] = [
-                    'ad_group_id' => (int) $term['ad_group_id'],
-                    'campaign_id' => (int) $term['campaign_id'],
-                    'impressions' => $impressions,
-                    'clicks'      => $clicks,
-                    'ctr'         => round($ctr, 2),
-                    'conversions' => $conversions,
-                    'cost'        => round($cost, 2),
-                    'reason'      => 'High CTR with conversions',
-                ];
+            $base = [
+                'search_term' => $searchText,
+                'match_type'  => $term['match_type'],
+                'ad_group_id' => (int) $term['ad_group_id'],
+                'campaign_id' => (int) $term['campaign_id'],
+                'impressions' => $impressions,
+                'clicks'      => $clicks,
+                'ctr'         => round($ctr, 2),
+                'conversions' => $conversions,
+                'cost'        => round($cost, 2),
+            ];
+
+            // High-CTR terms — positive keyword candidates
+            if ($ctr >= $this->highCtrThreshold) {
+                $addKeywords[] = array_merge($base, [
+                    'recommendation' => 'add_keyword',
+                    'reason'         => 'High CTR with conversions',
+                ]);
             }
 
-            // Low-CTR + high spend + no conversions — negative candidates
-            if ($ctr < $this->lowCtrThreshold
-                && $costMicros > $avgCostPerGroup * $this->highSpendFactor
-                && $conversions == 0
-            ) {
-                $addNegatives[] = [
-                    'ad_group_id' => (int) $term['ad_group_id'],
-                    'campaign_id' => (int) $term['campaign_id'],
-                    'impressions' => $impressions,
-                    'clicks'      => $clicks,
-                    'ctr'         => round($ctr, 2),
-                    'cost'        => round($cost, 2),
-                    'reason'      => 'Low CTR, high spend, zero conversions',
-                ];
+            // Low-CTR terms — negative keyword candidates
+            if ($ctr < $this->lowCtrThreshold) {
+                $addNegatives[] = array_merge($base, [
+                    'recommendation' => 'add_negative',
+                    'reason'         => 'Low CTR — likely irrelevant traffic',
+                ]);
+            }
+
+            // Terms with conversions not already in keywords table — expansion candidates
+            if ($conversions > 0 && !in_array(strtolower($searchText), $existingTerms, true)) {
+                $expansion[] = array_merge($base, [
+                    'recommendation' => 'expand_keyword',
+                    'reason'         => 'Converting search term not yet in keyword list',
+                ]);
             }
         }
 
         return [
             'add_keywords'  => $addKeywords,
             'add_negatives' => $addNegatives,
+            'expansion'     => $expansion,
             'total_terms'   => count($termData),
         ];
+    }
+
+    /**
+     * Find search terms that are strong negative keyword candidates based on
+     * spend efficiency: high spend with zero conversions, or very low CTR at scale.
+     *
+     * @return array  Each entry has search_term, metrics, and reason.
+     */
+    public function suggestNegatives(int $projectId): array
+    {
+        $db = DB::get();
+
+        $stmt = $db->prepare(
+            'SELECT
+                st.search_term,
+                st.match_type,
+                st.ad_group_id,
+                st.campaign_id,
+                SUM(st.impressions)  AS impressions,
+                SUM(st.clicks)       AS clicks,
+                SUM(st.cost_micros)  AS cost_micros,
+                SUM(st.conversions)  AS conversions
+             FROM search_terms st
+             WHERE st.project_id = ?
+             GROUP BY st.ad_group_id, st.search_term'
+        );
+        $stmt->execute([$projectId]);
+        $rows = $stmt->fetchAll();
+
+        $negatives = [];
+
+        foreach ($rows as $row) {
+            $impressions = (int)   $row['impressions'];
+            $clicks      = (int)   $row['clicks'];
+            $costMicros  = (int)   $row['cost_micros'];
+            $conversions = (float) $row['conversions'];
+            $cost        = $costMicros / 1_000_000;
+            $ctr         = $impressions > 0 ? ($clicks / $impressions) * 100 : 0.0;
+
+            $reasons = [];
+
+            // High spend, zero conversions
+            if ($cost >= $this->highSpendThreshold && $conversions == 0) {
+                $reasons[] = sprintf('High spend ($%.2f) with zero conversions', $cost);
+            }
+
+            // Very low CTR at meaningful scale
+            if ($ctr < $this->negativeCtrCap && $impressions >= $this->negativeMinImpr) {
+                $reasons[] = sprintf('Very low CTR (%.2f%%) with %d impressions', $ctr, $impressions);
+            }
+
+            if (empty($reasons)) {
+                continue;
+            }
+
+            $negatives[] = [
+                'search_term'    => $row['search_term'],
+                'match_type'     => $row['match_type'],
+                'ad_group_id'    => (int) $row['ad_group_id'],
+                'campaign_id'    => (int) $row['campaign_id'],
+                'impressions'    => $impressions,
+                'clicks'         => $clicks,
+                'ctr'            => round($ctr, 2),
+                'cost'           => round($cost, 2),
+                'conversions'    => $conversions,
+                'reasons'        => $reasons,
+                'recommendation' => 'add_negative',
+            ];
+        }
+
+        return $negatives;
     }
 
     /**
@@ -145,9 +227,10 @@ You are a Google Ads keyword optimisation expert.
 {$this->formatKeywords($existingKeywords)}
 
 ## Search Term Analysis
-Total ad groups analysed: {$mined['total_terms']}
-High-performing ad groups (keyword candidates): {$this->formatJson($mined['add_keywords'])}
-Low-performing ad groups (negative candidates): {$this->formatJson($mined['add_negatives'])}
+Total search terms analysed: {$mined['total_terms']}
+High-CTR terms (keyword candidates): {$this->formatJson($mined['add_keywords'])}
+Low-CTR terms (negative candidates): {$this->formatJson($mined['add_negatives'])}
+Converting terms not yet in keyword list (expansion): {$this->formatJson($mined['expansion'])}
 
 ## Instructions
 1. Suggest 10-20 new keywords to add (with match type recommendations)

@@ -78,6 +78,20 @@ class ReportsTest extends TestCase
         $this->assertStringContainsString('metrics.conversions', $query);
     }
 
+    public function testCampaignsQueryIncludesImpressionShareFields(): void
+    {
+        [$serviceMock, $capture] = $this->buildGoogleAdsServiceMock();
+        $this->injectMockClient($serviceMock);
+
+        $reports = new Reports();
+        $reports->campaigns();
+
+        $query = $capture->request->getQuery();
+        $this->assertStringContainsString('metrics.search_impression_share', $query);
+        $this->assertStringContainsString('metrics.search_budget_lost_impression_share', $query);
+        $this->assertStringContainsString('metrics.search_rank_lost_impression_share', $query);
+    }
+
     public function testCampaignsUsesDefaultDateRange(): void
     {
         [$serviceMock, $capture] = $this->buildGoogleAdsServiceMock();
@@ -234,6 +248,20 @@ class ReportsTest extends TestCase
         $query = $capture->request->getQuery();
         $this->assertStringContainsString('ad_group_criterion.keyword.text', $query);
         $this->assertStringContainsString('ad_group_criterion.keyword.match_type', $query);
+    }
+
+    public function testKeywordsQueryIncludesQualityScoreFields(): void
+    {
+        [$serviceMock, $capture] = $this->buildGoogleAdsServiceMock();
+        $this->injectMockClient($serviceMock);
+
+        $reports = new Reports();
+        $reports->keywords();
+
+        $query = $capture->request->getQuery();
+        $this->assertStringContainsString('ad_group_criterion.quality_info.quality_score', $query);
+        $this->assertStringContainsString('ad_group_criterion.quality_info.post_click_quality_score', $query);
+        $this->assertStringContainsString('ad_group_criterion.quality_info.creative_quality_score', $query);
     }
 
     public function testKeywordsQueryExcludesRemovedCriteria(): void

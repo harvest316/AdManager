@@ -3,6 +3,7 @@
 namespace AdManager\Optimise;
 
 use AdManager\DB;
+use AdManager\Google\Campaign\Search as GoogleSearchCampaign;
 
 class BudgetAllocator
 {
@@ -146,6 +147,81 @@ class BudgetAllocator
         usort($recommendations, fn($a, $b) => abs($b['change']) <=> abs($a['change']));
 
         return $recommendations;
+    }
+
+    /**
+     * Execute budget recommendations: update the DB and attempt platform-level updates.
+     *
+     * Each recommendation is the output shape from recommend():
+     *   ['campaign_id', 'platform', 'recommended_budget', ...]
+     *
+     * @param  array $recommendations  Output from recommend()
+     * @param  int   $projectId        Owning project (used to update budgets table)
+     * @return array{updated: int[], errors: string[]}
+     */
+    public function execute(array $recommendations, int $projectId): array
+    {
+        $db      = DB::get();
+        $updated = [];
+        $errors  = [];
+
+        foreach ($recommendations as $rec) {
+            $campaignId      = (int) $rec['campaign_id'];
+            $recommendedAud  = (float) $rec['recommended_budget'];
+            $platform        = $rec['platform'];
+
+            // 1. Update the campaign's daily_budget_aud in the DB
+            $stmt = $db->prepare(
+                'UPDATE campaigns SET daily_budget_aud = ?, updated_at = datetime(\'now\') WHERE id = ?'
+            );
+            $stmt->execute([$recommendedAud, $campaignId]);
+
+            // 2. Update the platform budget table (budgets row for this project+platform)
+            //    We recalculate total from all active campaigns to keep it consistent.
+            $totalStmt = $db->prepare(
+                "SELECT SUM(daily_budget_aud) AS total
+                 FROM campaigns
+                 WHERE project_id = ? AND platform = ? AND status IN ('enabled', 'active')"
+            );
+            $totalStmt->execute([$projectId, $platform]);
+            $total = (float) ($totalStmt->fetch()['total'] ?? 0);
+
+            $budgetStmt = $db->prepare(
+                'INSERT INTO budgets (project_id, platform, daily_budget_aud, updated_at)
+                 VALUES (?, ?, ?, datetime(\'now\'))
+                 ON CONFLICT(project_id, platform) DO UPDATE
+                 SET daily_budget_aud = excluded.daily_budget_aud,
+                     updated_at = excluded.updated_at'
+            );
+            $budgetStmt->execute([$projectId, $platform, $total]);
+
+            // 3. Attempt platform-level update if the campaign has an external_id
+            $extStmt = $db->prepare('SELECT external_id FROM campaigns WHERE id = ?');
+            $extStmt->execute([$campaignId]);
+            $externalId = $extStmt->fetch()['external_id'] ?? null;
+
+            if ($externalId) {
+                try {
+                    if ($platform === 'google') {
+                        // Google budget is in micros; external_id is the budget resource name
+                        $google = new GoogleSearchCampaign();
+                        $google->updateBudget($externalId, $recommendedAud * 1_000_000);
+                    } elseif ($platform === 'meta') {
+                        // Meta daily_budget is in cents; use the Graph API directly via client
+                        \AdManager\Meta\Client::get()->post($externalId, [
+                            'daily_budget' => (int) round($recommendedAud * 100),
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    $errors[] = "Failed to update campaign {$campaignId} (external: {$externalId}) on {$platform}: {$e->getMessage()}";
+                    // DB already updated — platform sync failure is non-fatal
+                }
+            }
+
+            $updated[] = $campaignId;
+        }
+
+        return ['updated' => $updated, 'errors' => $errors];
     }
 
     /**

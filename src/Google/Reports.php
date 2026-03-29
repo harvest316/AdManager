@@ -31,7 +31,10 @@ class Reports
                 metrics.average_cpc,
                 metrics.cost_micros,
                 metrics.conversions,
-                metrics.cost_per_conversion
+                metrics.cost_per_conversion,
+                metrics.search_impression_share,
+                metrics.search_budget_lost_impression_share,
+                metrics.search_rank_lost_impression_share
             FROM campaign
             WHERE segments.date DURING {$dateRange}
             ORDER BY metrics.cost_micros DESC
@@ -76,6 +79,9 @@ class Reports
                 ad_group.name,
                 ad_group_criterion.keyword.text,
                 ad_group_criterion.keyword.match_type,
+                ad_group_criterion.quality_info.quality_score,
+                ad_group_criterion.quality_info.post_click_quality_score,
+                ad_group_criterion.quality_info.creative_quality_score,
                 metrics.impressions,
                 metrics.clicks,
                 metrics.ctr,

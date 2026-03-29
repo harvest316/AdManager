@@ -144,6 +144,26 @@ class Ad
     }
 
     /**
+     * Pause a live ad.
+     *
+     * @param string $adId Meta ad ID
+     */
+    public function pause(string $adId): void
+    {
+        $this->client->post($adId, ['status' => 'PAUSED']);
+    }
+
+    /**
+     * Enable (un-pause) an ad.
+     *
+     * @param string $adId Meta ad ID
+     */
+    public function enable(string $adId): void
+    {
+        $this->client->post($adId, ['status' => 'ACTIVE']);
+    }
+
+    /**
      * List ad creatives for the account.
      */
     public function listCreatives(): array

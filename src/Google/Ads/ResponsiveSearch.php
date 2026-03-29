@@ -95,4 +95,46 @@ class ResponsiveSearch
 
         return $response->getResults()[0]->getResourceName();
     }
+
+    /**
+     * Pause an existing AdGroupAd by its resource name.
+     *
+     * @param string $adGroupAdResourceName e.g. customers/123/adGroupAds/456~789
+     */
+    public function pause(string $adGroupAdResourceName): void
+    {
+        $this->setStatus($adGroupAdResourceName, AdGroupAdStatus::PAUSED);
+    }
+
+    /**
+     * Enable (un-pause) an existing AdGroupAd by its resource name.
+     *
+     * @param string $adGroupAdResourceName e.g. customers/123/adGroupAds/456~789
+     */
+    public function enable(string $adGroupAdResourceName): void
+    {
+        $this->setStatus($adGroupAdResourceName, AdGroupAdStatus::ENABLED);
+    }
+
+    /**
+     * Shared status-update helper.
+     */
+    private function setStatus(string $adGroupAdResourceName, int $status): void
+    {
+        $client = Client::get();
+
+        $adGroupAd = new AdGroupAd([
+            'resource_name' => $adGroupAdResourceName,
+            'status'        => $status,
+        ]);
+
+        $op = new AdGroupAdOperation();
+        $op->setUpdate($adGroupAd);
+        $op->setUpdateMask(new \Google\Protobuf\FieldMask(['paths' => ['status']]));
+
+        $service = $client->getAdGroupAdServiceClient();
+        $service->mutateAdGroupAds(
+            MutateAdGroupAdsRequest::build($this->customerId, [$op])
+        );
+    }
 }

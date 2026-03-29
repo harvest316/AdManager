@@ -17,6 +17,7 @@ use Google\Ads\GoogleAds\V20\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignBudgetsRequest;
 use Google\Ads\GoogleAds\V20\Services\MutateCampaignsRequest;
 use Google\Ads\GoogleAds\V20\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\Util\FieldMasks;
 use Google\Ads\GoogleAds\Util\V20\ResourceNames;
 
 class Search
@@ -97,6 +98,106 @@ class Search
         );
 
         return $campaignResponse->getResults()[0]->getResourceName();
+    }
+
+    /**
+     * Pause a campaign by resource name.
+     *
+     * @param string $campaignResourceName e.g. 'customers/123/campaigns/456'
+     */
+    public function pause(string $campaignResourceName): void
+    {
+        $campaign = new Campaign([
+            'resource_name' => $campaignResourceName,
+            'status'        => CampaignStatus::PAUSED,
+        ]);
+
+        $op = new CampaignOperation();
+        $op->setUpdate($campaign);
+        $op->setUpdateMask(FieldMasks::allSetFieldsOf($campaign));
+
+        $client  = Client::get();
+        $service = $client->getCampaignServiceClient();
+        $service->mutateCampaigns(
+            MutateCampaignsRequest::build($this->customerId, [$op])
+        );
+    }
+
+    /**
+     * Enable (un-pause) a campaign by resource name.
+     *
+     * @param string $campaignResourceName e.g. 'customers/123/campaigns/456'
+     */
+    public function enable(string $campaignResourceName): void
+    {
+        $campaign = new Campaign([
+            'resource_name' => $campaignResourceName,
+            'status'        => CampaignStatus::ENABLED,
+        ]);
+
+        $op = new CampaignOperation();
+        $op->setUpdate($campaign);
+        $op->setUpdateMask(FieldMasks::allSetFieldsOf($campaign));
+
+        $client  = Client::get();
+        $service = $client->getCampaignServiceClient();
+        $service->mutateCampaigns(
+            MutateCampaignsRequest::build($this->customerId, [$op])
+        );
+    }
+
+    /**
+     * Switch a campaign's bidding strategy.
+     *
+     * @param string      $campaignResourceName e.g. 'customers/123/campaigns/456'
+     * @param string      $strategy             'manual_cpc', 'maximize_conversions', or 'target_cpa'
+     * @param float|null  $targetCpa            Target CPA in account currency (only for 'target_cpa')
+     */
+    public function updateBidStrategy(string $campaignResourceName, string $strategy, ?float $targetCpa = null): void
+    {
+        $campaign = new Campaign(['resource_name' => $campaignResourceName]);
+
+        match ($strategy) {
+            'manual_cpc'          => $campaign->setManualCpc(new ManualCpc(['enhanced_cpc_enabled' => false])),
+            'target_cpa'          => $campaign->setTargetCpa(new TargetCpa([
+                'target_cpa_micros' => (int) (($targetCpa ?? 0) * 1_000_000),
+            ])),
+            default               => $campaign->setMaximizeConversions(new MaximizeConversions()),
+        };
+
+        $op = new CampaignOperation();
+        $op->setUpdate($campaign);
+        $op->setUpdateMask(FieldMasks::allSetFieldsOf($campaign));
+
+        $client  = Client::get();
+        $service = $client->getCampaignServiceClient();
+        $service->mutateCampaigns(
+            MutateCampaignsRequest::build($this->customerId, [$op])
+        );
+    }
+
+    /**
+     * Update a campaign budget's daily amount.
+     *
+     * @param string $budgetResourceName  e.g. 'customers/123/campaignBudgets/789'
+     * @param float  $dailyBudgetMicros   New daily budget in micros (e.g. 6_700_000 = $6.70)
+     */
+    public function updateBudget(string $budgetResourceName, float $dailyBudgetMicros): void
+    {
+        $budget = new CampaignBudget([
+            'resource_name' => $budgetResourceName,
+            'amount_micros' => (int) $dailyBudgetMicros,
+        ]);
+
+        $op = new CampaignBudgetOperation();
+        $op->setUpdate($budget);
+        $op->setUpdateMask(FieldMasks::allSetFieldsOf($budget));
+
+        $client  = Client::get();
+        $service = $client->getCampaignBudgetServiceClient();
+        $service->mutateCampaignBudgets(
+            MutateCampaignBudgetsRequest::build($this->customerId, [$op])
+        );
     }
 
     /**

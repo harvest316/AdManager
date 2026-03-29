@@ -45,17 +45,20 @@ class ConversionTracking
     /**
      * Create a conversion action.
      *
-     * @param string $name         Conversion action name.
-     * @param string $type         WEBPAGE, PHONE_CALL, IMPORT, CLICK_TO_CALL.
-     * @param string $category     PURCHASE, LEAD, SIGNUP, PAGE_VIEW, etc.
-     * @param float  $defaultValue Default conversion value in account currency.
-     * @return string              Resource name of the created conversion action.
+     * @param string $name                 Conversion action name.
+     * @param string $type                 WEBPAGE, PHONE_CALL, IMPORT, CLICK_TO_CALL.
+     * @param string $category             PURCHASE, LEAD, SIGNUP, PAGE_VIEW, etc.
+     * @param float  $defaultValue         Default conversion value in account currency.
+     * @param bool   $includeInConversions True = primary conversion (counts in "Conversions" column);
+     *                                     false = secondary/micro conversion (counts only in "All conv.").
+     * @return string                      Resource name of the created conversion action.
      */
     public function createConversionAction(
         string $name,
         string $type = 'WEBPAGE',
         string $category = 'PURCHASE',
-        float $defaultValue = 0
+        float $defaultValue = 0,
+        bool $includeInConversions = true
     ): string {
         $client  = Client::get();
         $service = $client->getConversionActionServiceClient();
@@ -71,10 +74,11 @@ class ConversionTracking
             );
 
         $actionData = [
-            'name'     => $name,
-            'type'     => $typeEnum,
-            'category' => $categoryEnum,
-            'status'   => ConversionActionStatus::ENABLED,
+            'name'                          => $name,
+            'type'                          => $typeEnum,
+            'category'                      => $categoryEnum,
+            'status'                        => ConversionActionStatus::ENABLED,
+            'include_in_conversions_metric' => $includeInConversions,
         ];
 
         if ($defaultValue > 0) {
@@ -94,6 +98,35 @@ class ConversionTracking
         );
 
         return $response->getResults()[0]->getResourceName();
+    }
+
+    /**
+     * Update the include_in_conversions_metric flag on an existing conversion action.
+     *
+     * @param string $conversionActionResourceName e.g. 'customers/123/conversionActions/456'
+     * @param bool   $include                      True = primary; false = secondary/micro.
+     */
+    public function setIncludeInConversions(string $conversionActionResourceName, bool $include): void
+    {
+        $client  = Client::get();
+        $service = $client->getConversionActionServiceClient();
+
+        $conversionAction = new ConversionAction([
+            'resource_name'                 => $conversionActionResourceName,
+            'include_in_conversions_metric' => $include,
+        ]);
+
+        $op = new ConversionActionOperation();
+        $op->setUpdate($conversionAction);
+
+        // Build field mask manually: only the include_in_conversions_metric field.
+        $fieldMask = new \Google\Protobuf\FieldMask();
+        $fieldMask->setPaths(['include_in_conversions_metric']);
+        $op->setUpdateMask($fieldMask);
+
+        $service->mutateConversionActions(
+            MutateConversionActionsRequest::build($this->customerId, [$op])
+        );
     }
 
     /**
