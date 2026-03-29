@@ -10,6 +10,7 @@ $store = new ReviewStore();
 $projectId = isset($_GET['project']) ? (int)$_GET['project'] : null;
 $statusFilter = $_GET['status'] ?? null;
 $tab = $_GET['tab'] ?? 'creative';
+$langFilter = $_GET['lang'] ?? null;
 
 $projects = DB::get()->query('SELECT * FROM projects ORDER BY name')->fetchAll();
 if (!$projectId && count($projects) > 0) $projectId = (int)$projects[0]['id'];
@@ -20,13 +21,21 @@ $pendingCampaigns = $projectId ? $store->getPendingCampaigns($projectId) : [];
 
 $adCopy = [];
 $copyCounts = [];
+$langCounts = [];
 if ($projectId) {
-    $copyStmt = DB::get()->prepare('SELECT * FROM ad_copy WHERE project_id = ?' . ($statusFilter ? ' AND status = ?' : '') . ' ORDER BY campaign_name, ad_group_name, copy_type, id');
-    $copyStmt->execute($statusFilter ? [$projectId, $statusFilter] : [$projectId]);
+    $where = 'project_id = ?';
+    $params = [$projectId];
+    if ($statusFilter) { $where .= ' AND status = ?'; $params[] = $statusFilter; }
+    if ($langFilter) { $where .= ' AND language = ?'; $params[] = $langFilter; }
+    $copyStmt = DB::get()->prepare("SELECT * FROM ad_copy WHERE {$where} ORDER BY campaign_name, ad_group_name, copy_type, id");
+    $copyStmt->execute($params);
     $adCopy = $copyStmt->fetchAll();
     $ccStmt = DB::get()->prepare('SELECT status, COUNT(*) as cnt FROM ad_copy WHERE project_id = ? GROUP BY status');
     $ccStmt->execute([$projectId]);
     foreach ($ccStmt->fetchAll() as $r) $copyCounts[$r['status']] = (int)$r['cnt'];
+    $lcStmt = DB::get()->prepare('SELECT language, COUNT(*) as cnt FROM ad_copy WHERE project_id = ? GROUP BY language ORDER BY language');
+    $lcStmt->execute([$projectId]);
+    foreach ($lcStmt->fetchAll() as $r) $langCounts[$r['language']] = (int)$r['cnt'];
 }
 
 $budgets = [];
@@ -163,11 +172,21 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
  <a href="?project=<?=$projectId?>&tab=campaigns" class="tab <?=$tab==='campaigns'?'active':''?>">Campaigns<span class="ct"><?=count($pendingCampaigns)?></span></a>
 </div>
 <?php if($tab!=='campaigns'): ?>
+<?php $langParam = $langFilter ? '&lang='.e($langFilter) : ''; ?>
 <div class="fbar">
- <?php foreach($statuses as $k=>$v): $on=($statusFilter??'')===$k; $href='?project='.$projectId.'&tab='.e($tab).($k?'&status='.$k:''); $c=$k===''?($statusCounts['all']??0):($statusCounts[$k]??0); ?>
+ <?php foreach($statuses as $k=>$v): $on=($statusFilter??'')===$k; $href='?project='.$projectId.'&tab='.e($tab).($k?'&status='.$k:'').$langParam; $c=$k===''?($statusCounts['all']??0):($statusCounts[$k]??0); ?>
  <a href="<?=$href?>" class="fb <?=$on?'on':''?>" style="color:<?=$v['color']?>;background:<?=$v['bg']?>"><?=$v['label']?> <span class="fc"><?=$c?></span></a>
  <?php endforeach; ?>
 </div>
+<?php if($tab==='copy' && !empty($langCounts)): ?>
+<?php $statusParam = $statusFilter ? '&status='.e($statusFilter) : ''; ?>
+<div class="fbar" style="margin-top:-16px">
+ <a href="?project=<?=$projectId?>&tab=copy<?=$statusParam?>" class="fb <?=!$langFilter?'on':''?>" style="color:#8b949e;background:#30363d">All <span class="fc"><?=array_sum($langCounts)?></span></a>
+ <?php foreach($langCounts as $lc=>$cnt): $lon=($langFilter===$lc); ?>
+ <a href="?project=<?=$projectId?>&tab=copy&lang=<?=e($lc)?><?=$statusParam?>" class="fb <?=$lon?'on':''?>" style="color:var(--blue);background:#0d2240"><?=strtoupper($lc)?> <span class="fc"><?=$cnt?></span></a>
+ <?php endforeach; ?>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <?php if($tab==='creative'): ?>
@@ -222,7 +241,7 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
     <div class="ccard" id="c-<?=$c['id']?>">
      <div class="ch">
       <span class="ct-badge ct-<?=$c['copy_type']?>"><?=e($c['copy_type'])?></span>
-      <span style="color:<?=$cst['color']?>;font-size:11px;font-weight:600"><?=$cst['label']?></span>
+      <span><?php if(!empty($c['language'])&&$c['language']!=='en'): ?><span class="cpin"><?=strtoupper(e($c['language']))?></span><?php endif; ?> <span style="color:<?=$cst['color']?>;font-size:11px;font-weight:600"><?=$cst['label']?></span></span>
      </div>
      <div class="cc"><?=e($c['content'])?></div>
      <div class="cmeta">
