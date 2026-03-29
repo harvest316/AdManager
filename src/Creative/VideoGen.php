@@ -30,11 +30,11 @@ class VideoGen
      * Generate a video from a text prompt via Kling API.
      *
      * @param  string $prompt          Text description of the desired video
-     * @param  int    $durationSeconds Video duration (default 5s)
-     * @param  string $aspectRatio     Aspect ratio (default '16:9')
+     * @param  int    $durationSeconds Video duration (default 10s — Kling max is 10s, chain for 15s)
+     * @param  string $aspectRatio     Aspect ratio: '16:9' (landscape), '9:16' (portrait/reels), '1:1' (square)
      * @return string                  Local file path of the downloaded video
      */
-    public function generate(string $prompt, int $durationSeconds = 5, string $aspectRatio = '16:9'): string
+    public function generate(string $prompt, int $durationSeconds = 10, string $aspectRatio = '9:16'): string
     {
         // Create video generation task
         $payload = [

@@ -10,9 +10,13 @@ strategies/*.md
 reports/*.md
 assets/images/*
 assets/videos/*
+assets/music/*
+assets/captions/*
 !strategies/.gitkeep
 !reports/.gitkeep
 !assets/images/.gitkeep
 !assets/videos/.gitkeep
+!assets/music/.gitkeep
+!assets/captions/.gitkeep
 .direnv/
 .phpunit.result.cache
