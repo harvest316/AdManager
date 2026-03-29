@@ -17,7 +17,7 @@ class Proofreader
     private string $claudeBin;
     private string $promptsDir;
     private string $policiesDir;
-    private int $timeout = 180;
+    private int $timeout = 300;
 
     public function __construct()
     {
