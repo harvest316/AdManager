@@ -55,17 +55,38 @@ $errors = [];
 foreach ($policyUrls as $key => $url) {
     echo "Checking {$key}... ";
 
-    $content = @file_get_contents($url);
-    if ($content === false) {
-        echo "FETCH ERROR\n";
-        $errors[] = "{$key}: failed to fetch {$url}";
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 5,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; AdManager-PolicyChecker/1.0)',
+        CURLOPT_SSL_VERIFYPEER => true,
+    ]);
+    $content = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($content === false || $httpCode >= 400) {
+        echo "FETCH ERROR (HTTP {$httpCode}" . ($curlErr ? ": {$curlErr}" : '') . ")\n";
+        $errors[] = "{$key}: failed to fetch {$url} (HTTP {$httpCode})";
         continue;
     }
 
-    // Strip volatile elements (timestamps, session tokens, etc.)
+    // Strip volatile elements (timestamps, session tokens, nonces, etc.)
     $content = preg_replace('/<script[^>]*>.*?<\/script>/s', '', $content);
     $content = preg_replace('/<style[^>]*>.*?<\/style>/s', '', $content);
+    $content = preg_replace('/<noscript[^>]*>.*?<\/noscript>/s', '', $content);
+    $content = preg_replace('/<head[^>]*>.*?<\/head>/s', '', $content);
+    $content = preg_replace('/<footer[^>]*>.*?<\/footer>/s', '', $content);
+    $content = preg_replace('/<nav[^>]*>.*?<\/nav>/s', '', $content);
+    // Remove all HTML attributes (contain volatile tokens, nonces, data-* attrs)
+    $content = preg_replace('/<([a-z]+)\s[^>]*>/i', '<$1>', $content);
     $content = strip_tags($content);
+    // Remove numbers that look like timestamps/IDs (10+ digits)
+    $content = preg_replace('/\b\d{10,}\b/', '', $content);
     $content = preg_replace('/\s+/', ' ', $content);
     $content = trim($content);
 

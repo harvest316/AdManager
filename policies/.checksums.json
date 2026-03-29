@@ -1,17 +1,17 @@
 {
     "google_content": {
         "url": "https://support.google.com/adspolicy/answer/6008942",
-        "hash": "e5d14ce3cdcaf792b606be749d0f6ca42f018f442d409bb7d3a2a85556f7d62a",
-        "checked_at": "2026-03-29T07:32:54+00:00"
+        "hash": "22d3f29a769f9e5c50a68d66c1fcb6c1037e739a8dcbc581009b282609998906",
+        "checked_at": "2026-03-29T07:50:33+00:00"
     },
     "google_editorial": {
         "url": "https://support.google.com/adspolicy/answer/6021546",
-        "hash": "d49a19aa04be67f59dbe0adcea74d152d5e77af9d5c7fd3795f410ede07d55aa",
-        "checked_at": "2026-03-29T07:32:57+00:00"
+        "hash": "d1a574f54c5c2143c6f77c2e97150838d3b41681f271190b4bc246a15027f96a",
+        "checked_at": "2026-03-29T07:50:36+00:00"
     },
     "meta_standards": {
         "url": "https://transparency.meta.com/policies/ad-standards",
-        "hash": null,
-        "checked_at": null
+        "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "checked_at": "2026-03-29T07:50:38+00:00"
     }
 }
