@@ -48,28 +48,46 @@ class ImageGen
         $model = self::MODELS[$mode];
 
         if ($mode === 'draft') {
-            // Gemini Flash — ask via chat to generate an image, returns base64 in response
+            // Gemini Flash Image — generates images natively
             $messages = [
                 [
                     'role'    => 'user',
-                    'content' => "Generate an image: {$prompt}. Dimensions: {$width}x{$height} pixels. "
-                               . "Return ONLY the raw base64-encoded PNG data, no markdown, no explanation.",
+                    'content' => "Generate an image: {$prompt}. Dimensions: {$width}x{$height} pixels.",
                 ],
             ];
 
             $response = $this->callOpenRouter($model, $messages);
 
-            $content = $response['choices'][0]['message']['content'] ?? '';
+            $message = $response['choices'][0]['message'] ?? [];
+            $content = $message['content'] ?? '';
+            $imageData = '';
 
-            // Strip any markdown fencing or whitespace
-            $content = preg_replace('/^```[a-z]*\s*/i', '', $content);
-            $content = preg_replace('/\s*```\s*$/', '', $content);
-            $content = preg_replace('/^data:image\/[a-z]+;base64,/i', '', $content);
-            $content = trim($content);
+            // Gemini image models return content as an array of parts
+            if (is_array($content)) {
+                foreach ($content as $part) {
+                    if (isset($part['type']) && $part['type'] === 'image_url' && isset($part['image_url']['url'])) {
+                        $dataUrl = $part['image_url']['url'];
+                        if (preg_match('#^data:image/[a-z]+;base64,(.+)$#s', $dataUrl, $m)) {
+                            $imageData = base64_decode($m[1], true);
+                            break;
+                        }
+                    }
+                }
+            }
 
-            $imageData = base64_decode($content, true);
-            if ($imageData === false) {
-                throw new \RuntimeException('Failed to decode base64 image data from model response');
+            // Fallback: content might be a plain base64 string or data URL
+            if (!$imageData && is_string($content)) {
+                $content = preg_replace('/^```[a-z]*\s*/i', '', $content);
+                $content = preg_replace('/\s*```\s*$/', '', $content);
+                $content = preg_replace('/^data:image\/[a-z]+;base64,/i', '', $content);
+                $content = trim($content);
+                if ($content !== '') {
+                    $imageData = base64_decode($content, true);
+                }
+            }
+
+            if (!$imageData) {
+                throw new \RuntimeException('Failed to extract image data from model response');
             }
         } else {
             // FLUX production model — image generation via chat completions
@@ -103,6 +121,11 @@ class ImageGen
                     throw new \RuntimeException('Failed to decode image data from FLUX response');
                 }
             }
+        }
+
+        // Sanity check — don't save empty files
+        if (strlen($imageData) < 100) {
+            throw new \RuntimeException('Image data too small (' . strlen($imageData) . ' bytes) — likely not a real image');
         }
 
         // Save to file

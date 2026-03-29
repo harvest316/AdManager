@@ -7,7 +7,13 @@
 
 $path = $_GET['path'] ?? '';
 $basePath = realpath(__DIR__ . '/../assets/');
-$filePath = realpath(__DIR__ . '/../' . $path);
+
+// Support both absolute paths (from DB) and relative paths
+if (str_starts_with($path, '/')) {
+    $filePath = realpath($path);
+} else {
+    $filePath = realpath(__DIR__ . '/../' . $path);
+}
 
 // Security: ensure file is within assets directory
 if (!$filePath || !$basePath || !str_starts_with($filePath, $basePath)) {
