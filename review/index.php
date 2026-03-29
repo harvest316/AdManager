@@ -351,15 +351,16 @@ el.addEventListener('click',function(){
   if(el.querySelector('input'))return;
   var daily=parseFloat(el.dataset.daily);
   var monthly=Math.round(daily*30.4);
+  var isMonthly=false;
+  var wrap=document.createElement('span');wrap.style.display='inline-flex';wrap.style.alignItems='center';wrap.style.gap='4px';
   var inp=document.createElement('input');
   inp.type='number';inp.step='0.01';inp.min='0';inp.className='budget-input';
-  // Ask: edit daily or monthly?
-  var mode=prompt('Edit daily or monthly? (d/m)','d');
-  if(!mode)return;
-  var isMonthly=mode.toLowerCase().startsWith('m');
-  inp.value=isMonthly?monthly.toFixed(0):daily.toFixed(2);
-  inp.placeholder=isMonthly?'$/month':'$/day';
-  el.textContent='';el.appendChild(inp);inp.focus();inp.select();
+  inp.value=daily.toFixed(2);
+  var tog=document.createElement('button');
+  tog.textContent='/day';tog.className='btn btn-sm';tog.style.flex='0';tog.style.padding='3px 6px';tog.style.fontSize='10px';tog.style.minWidth='45px';
+  tog.onclick=function(e){e.stopPropagation();isMonthly=!isMonthly;tog.textContent=isMonthly?'/mo':'/day';inp.value=isMonthly?Math.round(daily*30.4).toFixed(0):daily.toFixed(2);inp.focus();inp.select()};
+  wrap.appendChild(inp);wrap.appendChild(tog);
+  el.textContent='';el.appendChild(wrap);inp.focus();inp.select();
   function save(){
     var val=parseFloat(inp.value);if(isNaN(val)||val<0){el.textContent='$'+daily.toFixed(2);return}
     var newDaily=isMonthly?val/30.4:val;
