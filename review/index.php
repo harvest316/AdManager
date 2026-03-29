@@ -64,6 +64,29 @@ $statuses = [
     'uploaded' => ['label'=>'Uploaded','color'=>'#bc8cff','bg'=>'#271052'],
 ];
 
+$typeTooltips = [
+    'search' => 'Text ads shown on Google Search results. Targets people actively searching for your product.',
+    'pmax' => 'Performance Max: AI-driven ads across Search, Display, YouTube, Gmail, Maps. You provide assets, Google optimises placement.',
+    'display' => 'Banner/image ads shown on websites in the Google Display Network. Good for retargeting and awareness.',
+    'video' => 'Video ads on YouTube (skippable in-stream, bumper, Shorts). Best for awareness and consideration.',
+    'demand_gen' => 'Demand Gen: visual ads across YouTube, Gmail, and Discover feeds. Similar to Meta — audience-based, not keyword-based.',
+    'shopping' => 'Product listing ads with images and prices. Requires a Merchant Center feed.',
+    'conversions' => 'Meta campaign optimised for a specific conversion event (purchase, signup, etc.).',
+    'traffic' => 'Meta campaign optimised for link clicks to your website.',
+    'awareness' => 'Meta campaign optimised for reach and impressions.',
+    'engagement' => 'Meta campaign optimised for likes, comments, shares.',
+];
+
+// Load ad groups for campaign detail expansion
+$adGroupsByCampaign = [];
+if ($projectId) {
+    $agStmt = DB::get()->prepare('SELECT * FROM ad_groups WHERE campaign_id IN (SELECT id FROM campaigns WHERE project_id = ?) ORDER BY name');
+    $agStmt->execute([$projectId]);
+    foreach ($agStmt->fetchAll() as $ag) {
+        $adGroupsByCampaign[$ag['campaign_id']][] = $ag;
+    }
+}
+
 $statusCounts = ['all' => 0];
 if ($projectId) {
     if ($tab === 'copy') {
@@ -110,6 +133,14 @@ select{background:var(--bg3);color:var(--t1);border:1px solid var(--border);bord
 .editable-budget{cursor:pointer;border-bottom:1px dashed var(--t3);transition:border-color .15s}
 .editable-budget:hover{border-color:var(--blue)}
 .budget-input{background:var(--bg3);color:var(--t1);border:1px solid var(--blue);border-radius:4px;padding:4px 8px;font-size:inherit;font-weight:inherit;width:100px;text-align:right}
+.type-tip{cursor:help;border-bottom:1px dotted var(--t3)}
+.detail-row{display:none}.detail-row.open{display:table-row}
+.detail-row td{padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border)}
+.detail-content{font-size:13px;color:var(--t2);line-height:1.6}
+.detail-content dt{color:var(--t1);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;margin-top:10px}
+.detail-content dt:first-child{margin-top:0}
+.detail-content dd{margin:2px 0 0 0}
+.expand-btn{cursor:pointer;color:var(--blue);font-size:11px;border:none;background:none;padding:0;text-decoration:underline}
 .badge-tl{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.7);color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .badge-tr{position:absolute;top:10px;right:10px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 .badge-bl{position:absolute;bottom:8px;left:10px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
@@ -303,14 +334,30 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
  <?php foreach($byPlatform as $plat => $camps): ?>
  <div class="sec"><div class="sec-t"><span class="pb pb-<?=$plat?>"><?=e($plat)?></span> Campaigns <span class="bg"><?=count($camps)?></span></div>
  <table class="ct"><thead><tr><th>Campaign</th><th>Type</th><th>Daily</th><th>Monthly</th><th>Status</th><th>Action</th></tr></thead><tbody>
-  <?php foreach($camps as $c): $daily=(float)$c['daily_budget_aud']; $statusColor=$c['status']==='paused'?'var(--orange)':($c['status']==='active'?'var(--green)':'var(--t3)'); ?>
+  <?php foreach($camps as $c): $daily=(float)$c['daily_budget_aud']; $statusColor=$c['status']==='paused'?'var(--orange)':($c['status']==='active'?'var(--green)':'var(--t3)'); $tip=$typeTooltips[$c['type']]??''; $ags=$adGroupsByCampaign[$c['id']]??[]; ?>
   <tr>
-   <td><strong><?=e($c['name'])?></strong><?php if(!empty($c['external_id'])): ?><br><span style="color:var(--t3);font-size:11px"><?=e($c['external_id'])?></span><?php endif; ?></td>
-   <td style="color:var(--t2)"><?=e($c['type'])?></td>
+   <td><strong><?=e($c['name'])?></strong><?php if(!empty($c['external_id'])): ?><br><span style="color:var(--t3);font-size:11px"><?=e($c['external_id'])?></span><?php endif; ?><br><button class="expand-btn" onclick="var r=document.getElementById('det-<?=$c['id']?>');r.classList.toggle('open');this.textContent=r.classList.contains('open')?'hide details':'show details'">show details</button></td>
+   <td><span class="type-tip" title="<?=e($tip)?>"><?=e($c['type'])?></span></td>
    <td><span class="editable-budget" data-type="campaign" data-campaign-id="<?=$c['id']?>" data-daily="<?=$daily?>" data-monthly="0">$<?=number_format($daily,2)?></span></td>
    <td><span class="editable-budget" data-type="campaign" data-campaign-id="<?=$c['id']?>" data-daily="<?=$daily?>" data-monthly="1" style="color:var(--t2)">$<?=number_format($daily*30.4,0)?></span></td>
    <td><span style="color:<?=$statusColor?>;font-weight:600;font-size:12px;text-transform:uppercase"><?=e($c['status'])?></span></td>
    <td><?php if($c['status']==='draft'||$c['status']==='paused'): ?><button class="btn btn-e btn-sm" onclick="act('enable_campaign',{campaign_id:<?=$c['id']?>,project_id:<?=$projectId?>})">Enable</button><?php endif; ?></td>
+  </tr>
+  <tr class="detail-row" id="det-<?=$c['id']?>">
+   <td colspan="6"><div class="detail-content"><dl>
+    <dt>Platform</dt><dd><?=e($c['platform'])?></dd>
+    <dt>Campaign type</dt><dd><?=e($tip ?: $c['type'])?></dd>
+    <?php if(!empty($c['external_id'])): ?><dt>External ID</dt><dd><?=e($c['external_id'])?></dd><?php endif; ?>
+    <dt>Created</dt><dd><?=e($c['created_at'])?></dd>
+    <?php if(!empty($ags)): ?>
+    <dt>Ad groups (<?=count($ags)?>)</dt>
+    <?php foreach($ags as $ag): ?>
+    <dd style="margin-left:12px"><strong><?=e($ag['name'])?></strong><?php if(!empty($ag['targeting'])): ?><br><span style="font-size:11px;color:var(--t3)">Targeting: <?=e(mb_substr($ag['targeting'],0,200))?></span><?php endif; ?></dd>
+    <?php endforeach; ?>
+    <?php else: ?>
+    <dt>Ad groups</dt><dd style="color:var(--t3)">None configured yet</dd>
+    <?php endif; ?>
+   </dl></div></td>
   </tr>
   <?php endforeach; ?>
  </tbody></table></div>
