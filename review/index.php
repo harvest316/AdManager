@@ -278,17 +278,17 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
  <!-- Budget Overview — editable -->
  <div class="sec"><div class="sec-t">Budget</div>
  <div class="bgrid">
-  <?php foreach($budgets as $b): $plat=strtolower($b['platform']); ?>
+  <?php foreach($budgets as $b): $plat=strtolower($b['platform']); $bd=(float)$b['daily_budget_aud']; ?>
   <div class="bcard">
    <div class="pf" style="color:<?=$plat==='google'?'var(--green)':'var(--blue)'?>"><?=e($b['platform'])?></div>
-   <div class="am"><span class="editable-budget" data-type="platform" data-platform="<?=e($b['platform'])?>" data-daily="<?=$b['daily_budget_aud']?>">$<?=number_format((float)$b['daily_budget_aud'],2)?></span></div>
-   <div class="lb">AUD / day (~$<?=number_format($b['daily_budget_aud']*30.4,0)?>/mo)</div>
+   <div class="am"><span class="editable-budget" data-type="platform" data-platform="<?=e($b['platform'])?>" data-daily="<?=$bd?>" data-monthly="0">$<?=number_format($bd,2)?></span><span style="font-size:14px;color:var(--t3)">/day</span></div>
+   <div class="lb"><span class="editable-budget" data-type="platform" data-platform="<?=e($b['platform'])?>" data-daily="<?=$bd?>" data-monthly="1" style="font-size:14px;font-weight:600;color:var(--t2)">$<?=number_format($bd*30.4,0)?></span><span style="color:var(--t3)">/mo</span></div>
   </div>
   <?php endforeach; ?>
   <div class="bcard" style="border-color:var(--blue)">
    <div class="pf" style="color:var(--blue)">Total</div>
-   <div class="am"><span class="editable-budget" data-type="total" data-daily="<?=$td?>">$<?=number_format($td,2)?></span></div>
-   <div class="lb">AUD / day (~$<?=number_format($td*30.4,0)?>/mo)</div>
+   <div class="am"><span class="editable-budget" data-type="total" data-daily="<?=$td?>" data-monthly="0">$<?=number_format($td,2)?></span><span style="font-size:14px;color:var(--t3)">/day</span></div>
+   <div class="lb"><span class="editable-budget" data-type="total" data-daily="<?=$td?>" data-monthly="1" style="font-size:14px;font-weight:600;color:var(--t2)">$<?=number_format($td*30.4,0)?></span><span style="color:var(--t3)">/mo</span></div>
   </div>
  </div>
  <p style="font-size:11px;color:var(--t3);margin-top:8px">Click any amount to edit. Changing platform or total budgets proportionally adjusts campaign budgets.</p>
@@ -307,8 +307,8 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
   <tr>
    <td><strong><?=e($c['name'])?></strong><?php if(!empty($c['external_id'])): ?><br><span style="color:var(--t3);font-size:11px"><?=e($c['external_id'])?></span><?php endif; ?></td>
    <td style="color:var(--t2)"><?=e($c['type'])?></td>
-   <td><span class="editable-budget" data-type="campaign" data-campaign-id="<?=$c['id']?>" data-daily="<?=$daily?>">$<?=number_format($daily,2)?></span></td>
-   <td style="color:var(--t2)">$<?=number_format($daily*30.4,0)?></td>
+   <td><span class="editable-budget" data-type="campaign" data-campaign-id="<?=$c['id']?>" data-daily="<?=$daily?>" data-monthly="0">$<?=number_format($daily,2)?></span></td>
+   <td><span class="editable-budget" data-type="campaign" data-campaign-id="<?=$c['id']?>" data-daily="<?=$daily?>" data-monthly="1" style="color:var(--t2)">$<?=number_format($daily*30.4,0)?></span></td>
    <td><span style="color:<?=$statusColor?>;font-weight:600;font-size:12px;text-transform:uppercase"><?=e($c['status'])?></span></td>
    <td><?php if($c['status']==='draft'||$c['status']==='paused'): ?><button class="btn btn-e btn-sm" onclick="act('enable_campaign',{campaign_id:<?=$c['id']?>,project_id:<?=$projectId?>})">Enable</button><?php endif; ?></td>
   </tr>
@@ -350,19 +350,15 @@ document.querySelectorAll('.editable-budget').forEach(function(el){
 el.addEventListener('click',function(){
   if(el.querySelector('input'))return;
   var daily=parseFloat(el.dataset.daily);
-  var monthly=Math.round(daily*30.4);
-  var isMonthly=false;
-  var wrap=document.createElement('span');wrap.style.display='inline-flex';wrap.style.alignItems='center';wrap.style.gap='4px';
+  var isMonthly=el.dataset.monthly==='1';
+  var origText=el.textContent;
   var inp=document.createElement('input');
-  inp.type='number';inp.step='0.01';inp.min='0';inp.className='budget-input';
-  inp.value=daily.toFixed(2);
-  var tog=document.createElement('button');
-  tog.textContent='/day';tog.className='btn btn-sm';tog.style.flex='0';tog.style.padding='3px 6px';tog.style.fontSize='10px';tog.style.minWidth='45px';
-  tog.onclick=function(e){e.stopPropagation();isMonthly=!isMonthly;tog.textContent=isMonthly?'/mo':'/day';inp.value=isMonthly?Math.round(daily*30.4).toFixed(0):daily.toFixed(2);inp.focus();inp.select()};
-  wrap.appendChild(inp);wrap.appendChild(tog);
-  el.textContent='';el.appendChild(wrap);inp.focus();inp.select();
+  inp.type='number';inp.step=isMonthly?'1':'0.01';inp.min='0';inp.className='budget-input';
+  inp.value=isMonthly?Math.round(daily*30.4).toFixed(0):daily.toFixed(2);
+  el.textContent='';el.appendChild(inp);inp.focus();inp.select();
+  function restore(d){el.textContent='$'+(isMonthly?Math.round(d*30.4):d.toFixed(2))}
   function save(){
-    var val=parseFloat(inp.value);if(isNaN(val)||val<0){el.textContent='$'+daily.toFixed(2);return}
+    var val=parseFloat(inp.value);if(isNaN(val)||val<0){restore(daily);return}
     var newDaily=isMonthly?val/30.4:val;
     var type=el.dataset.type;
     var d={project_id:<?=$projectId?>,daily_budget:newDaily.toFixed(2)};
@@ -372,11 +368,11 @@ el.addEventListener('click',function(){
     var f=new FormData;for(var k in d)f.append(k,d[k]);
     fetch('api.php',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:f})
     .then(function(r){return r.json()})
-    .then(function(j){if(j.ok){if(type!=='campaign')location.reload();else{el.dataset.daily=newDaily;el.textContent='$'+newDaily.toFixed(2);var monthTd=el.closest('tr').querySelectorAll('td')[3];if(monthTd)monthTd.textContent='$'+Math.round(newDaily*30.4)}}else toast(j.error||'Failed','e')})
+    .then(function(j){if(j.ok){if(type!=='campaign'){location.reload()}else{el.dataset.daily=newDaily;restore(newDaily)}}else toast(j.error||'Failed','e')})
     .catch(function(){toast('Network error','e')});
   }
   inp.addEventListener('blur',save);
-  inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();inp.blur()}if(e.key==='Escape'){el.textContent='$'+daily.toFixed(2)}});
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();inp.blur()}if(e.key==='Escape'){restore(daily)}});
 });
 });
 </script>
