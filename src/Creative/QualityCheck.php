@@ -13,39 +13,69 @@ use AdManager\DB;
 class QualityCheck
 {
     private string $claudeBin;
+    private string $promptsDir;
+    private string $policiesDir;
 
-    private const PROMPT = <<<'PROMPT'
-You are a creative QA specialist reviewing an ad image/video frame for a paid media campaign.
+    private const GOOGLE_VISUAL_POLICIES = <<<'POLICY'
+### Google Ads Visual Policy Rules
+12. **MISLEADING UI**: Does the image contain fake buttons, fake cursor icons, fake form fields, or other non-functional interactive elements that trick users into clicking?
+13. **BEFORE/AFTER**: Does the image show before/after comparison for health, weight loss, or cosmetic procedures without proper disclaimers?
+14. **TEXT COVERAGE**: Does text cover more than approximately 20% of the image area? (Google PMax and Display strongly penalise text-heavy images.)
+15. **GIMMICKY FORMATTING**: Does the image use flashing, pulsing, or otherwise attention-grabbing animated elements?
+POLICY;
 
-Check for these issues and report ONLY problems found. If the image passes all checks, say "PASS".
-
-1. TEXT LEGIBILITY: Is any overlay text cut off, too small, wrong contrast, or unreadable?
-2. AI ARTEFACTS: Are there distorted faces, extra fingers, melted text, impossible geometry, or other AI generation failures?
-3. DIMENSIONS: Does the image appear to be the wrong aspect ratio for ads (should be roughly 1:1, 4:5, 9:16, or 16:9)?
-4. BRAND SAFETY: Does the image contain anything that would violate Meta or Google ad policies (violence, nudity, misleading claims, prohibited content)?
-5. QUALITY: Is the image blurry, pixelated, over-compressed, or clearly low quality?
-6. COMPOSITION: Is the subject matter clear? Would a viewer understand what this ad is about in under 2 seconds?
-
-Respond in this exact JSON format (no markdown fencing):
-{
-  "status": "pass" | "fail" | "warning",
-  "issues": [
-    {"category": "text_legibility|ai_artefacts|dimensions|brand_safety|quality|composition", "severity": "fail|warning", "description": "specific issue found"}
-  ]
-}
-
-If no issues, respond: {"status": "pass", "issues": []}
-PROMPT;
+    private const META_VISUAL_POLICIES = <<<'POLICY'
+### Meta Visual Policy Rules
+12. **BEFORE/AFTER**: Does the image show before/after for health, weight loss, cosmetics, or body modification? Meta prohibits this in many categories.
+13. **PERSONAL ATTRIBUTES**: Does the image assert or imply the viewer has a specific personal attribute (health condition, body type, financial status, etc.)?
+14. **PLATFORM ENDORSEMENT**: Does the image imply endorsement by Facebook, Instagram, or Meta?
+15. **FAKE UI ELEMENTS**: Does the image contain non-functional play buttons, notification badges, close buttons, or other fake interactive elements?
+16. **SENSATIONAL IMAGERY**: Does the image use exploitative, graphic, or exaggerated imagery to provoke shock or fear?
+POLICY;
 
     public function __construct()
     {
         $this->claudeBin = getenv('CLAUDE_BIN') ?: '/home/jason/.local/bin/claude';
+        $this->promptsDir = dirname(__DIR__, 2) . '/prompts';
+        $this->policiesDir = dirname(__DIR__, 2) . '/policies';
+    }
+
+    /**
+     * Build the QA prompt with platform-specific policy rules.
+     */
+    private function buildPrompt(string $platform = 'all'): string
+    {
+        $templatePath = $this->promptsDir . '/IMAGE-POLICY-CHECK.md';
+        if (!file_exists($templatePath)) {
+            // Fallback to basic prompt if template missing
+            return $this->fallbackPrompt();
+        }
+
+        $template = file_get_contents($templatePath);
+
+        // Select platform-specific policy rules
+        $policyRules = '';
+        if ($platform === 'google' || $platform === 'all') {
+            $policyRules .= self::GOOGLE_VISUAL_POLICIES . "\n";
+        }
+        if ($platform === 'meta' || $platform === 'all') {
+            $policyRules .= self::META_VISUAL_POLICIES . "\n";
+        }
+
+        return str_replace('{{PLATFORM_POLICIES}}', $policyRules, $template);
+    }
+
+    private function fallbackPrompt(): string
+    {
+        return 'You are a creative QA specialist. Check this ad image for: text legibility, AI artefacts, dimensions, brand safety, quality, composition. Respond in JSON: {"status": "pass"|"fail"|"warning", "issues": [{"category":"...", "severity":"fail|warning", "description":"..."}]}';
     }
 
     /**
      * Run QA check on an asset. Updates the DB with results.
+     *
+     * @param string $platform Target ad platform ('google', 'meta', 'all') for policy-specific checks
      */
-    public function check(int $assetId): array
+    public function check(int $assetId, string $platform = 'all'): array
     {
         $db = DB::get();
         $stmt = $db->prepare('SELECT * FROM assets WHERE id = ?');
@@ -57,9 +87,9 @@ PROMPT;
         }
 
         if ($asset['type'] === 'image') {
-            $result = $this->checkFile($asset['local_path']);
+            $result = $this->checkFile($asset['local_path'], $platform);
         } elseif ($asset['type'] === 'video') {
-            $result = $this->checkVideoFrame($asset['local_path']);
+            $result = $this->checkVideoFrame($asset['local_path'], $platform);
         } else {
             $result = ['status' => 'pass', 'issues' => []];
         }
@@ -97,8 +127,10 @@ PROMPT;
 
     /**
      * Run QA on all unchecked draft assets for a project.
+     *
+     * @param string $platform Target ad platform for policy checks
      */
-    public function checkAllDrafts(int $projectId): array
+    public function checkAllDrafts(int $projectId, string $platform = 'all'): array
     {
         $db = DB::get();
         $stmt = $db->prepare(
@@ -110,7 +142,7 @@ PROMPT;
         $results = [];
         foreach ($assets as $asset) {
             echo "  Checking asset #{$asset['id']}...\n";
-            $results[$asset['id']] = $this->check((int)$asset['id']);
+            $results[$asset['id']] = $this->check((int)$asset['id'], $platform);
         }
 
         return $results;
@@ -119,7 +151,7 @@ PROMPT;
     /**
      * Check an image file using Claude CLI vision.
      */
-    private function checkFile(string $path): array
+    private function checkFile(string $path, string $platform = 'all'): array
     {
         if (!$path || !file_exists($path)) {
             return ['status' => 'warning', 'issues' => [
@@ -127,13 +159,13 @@ PROMPT;
             ]];
         }
 
-        return $this->callClaude($path);
+        return $this->callClaude($path, $platform);
     }
 
     /**
      * Extract a frame from video and check it.
      */
-    private function checkVideoFrame(string $path): array
+    private function checkVideoFrame(string $path, string $platform = 'all'): array
     {
         if (!$path || !file_exists($path)) {
             return ['status' => 'warning', 'issues' => [
@@ -154,7 +186,7 @@ PROMPT;
             ]];
         }
 
-        $result = $this->callClaude($framePath);
+        $result = $this->callClaude($framePath, $platform);
         @unlink($framePath);
         return $result;
     }
@@ -162,13 +194,14 @@ PROMPT;
     /**
      * Shell out to Claude CLI with an image file for vision QA.
      */
-    private function callClaude(string $imagePath): array
+    private function callClaude(string $imagePath, string $platform = 'all'): array
     {
-        $prompt = escapeshellarg(self::PROMPT);
+        $prompt = escapeshellarg($this->buildPrompt($platform));
         $path = escapeshellarg($imagePath);
 
         // Claude CLI accepts image files directly with the prompt
-        $cmd = "{$this->claudeBin} -p {$prompt} --model haiku --output-format text {$path}";
+        // Using Sonnet for policy compliance checks (higher stakes than artifact detection)
+        $cmd = "{$this->claudeBin} -p {$prompt} --model sonnet --output-format text {$path}";
 
         $descriptors = [
             0 => ['pipe', 'r'],

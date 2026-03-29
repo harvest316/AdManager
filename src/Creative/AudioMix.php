@@ -236,10 +236,11 @@ class AudioMix
 
     private function formatSrtTime(float $seconds): string
     {
-        $h = floor($seconds / 3600);
-        $m = floor(($seconds % 3600) / 60);
-        $s = floor($seconds % 60);
-        $ms = round(($seconds - floor($seconds)) * 1000);
+        $total = (int) floor($seconds);
+        $h = intdiv($total, 3600);
+        $m = intdiv($total % 3600, 60);
+        $s = $total % 60;
+        $ms = (int) round(($seconds - $total) * 1000);
         return sprintf('%02d:%02d:%02d,%03d', $h, $m, $s, $ms);
     }
 }

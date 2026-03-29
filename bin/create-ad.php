@@ -16,6 +16,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use AdManager\DB;
 use AdManager\Creative\ImageGen;
 use AdManager\Creative\ReviewStore;
+use AdManager\Copy\Store as CopyStore;
 use AdManager\Google\Client;
 use AdManager\Google\AssetUpload;
 use AdManager\Google\AdGroup;
@@ -307,20 +308,52 @@ function createGoogleAd(array $project, array $strategy, array $approvedAssets, 
     $finalUrl = $project['website_url'] ?? 'https://auditandfix.com';
 
     if ($campaignType === 'search') {
+        // Load approved copy from ad_copy table (populated by bin/proofread-copy.php)
+        $copyStore = new CopyStore();
+
+        // Try to match campaign name from strategy; fall back to first available
+        $campaignName = $args['campaign-name'] ?? null;
+        if (!$campaignName) {
+            // Auto-detect: find campaigns with approved headlines
+            $allCopy = $copyStore->listByProject((int) $project['id'], 'approved', 'headline', 'google');
+            $campaignNames = array_unique(array_column($allCopy, 'campaign_name'));
+            $campaignName = reset($campaignNames) ?: null;
+        }
+
+        $approvedHeadlines = $campaignName
+            ? $copyStore->getApprovedForCampaign((int) $project['id'], $campaignName, 'headline')
+            : [];
+        $approvedDescriptions = $campaignName
+            ? $copyStore->getApprovedForCampaign((int) $project['id'], $campaignName, 'description')
+            : [];
+
+        if (empty($approvedHeadlines) || empty($approvedDescriptions)) {
+            echo "Error: no approved ad copy found for campaign '{$campaignName}'.\n";
+            echo "Run proofreading first: php bin/proofread-copy.php --project {$projectName} --strategy {$args['strategy']}\n";
+            echo "Then review/approve copy in the dashboard.\n";
+            exit(1);
+        }
+
+        echo "  Using " . count($approvedHeadlines) . " approved headlines + " . count($approvedDescriptions) . " descriptions";
+        echo $campaignName ? " from campaign '{$campaignName}'\n" : "\n";
+
+        $headlines = array_map(function ($h) {
+            $entry = ['text' => $h['content']];
+            if ($h['pin_position']) {
+                $entry['pin'] = (int) $h['pin_position'];
+            }
+            return $entry;
+        }, $approvedHeadlines);
+
+        $descriptions = array_map(function ($d) {
+            return ['text' => $d['content']];
+        }, $approvedDescriptions);
+
         $rsaConfig = [
             'final_url'    => $finalUrl,
             'display_path' => ['Get-Started', ''],
-            'headlines'    => [
-                ['text' => substr($project['display_name'] ?? $project['name'], 0, 30)],
-                ['text' => substr($strategy['value_proposition'] ?? 'Get Started Today', 0, 30)],
-                ['text' => 'Professional Results'],
-                ['text' => 'Free Consultation'],
-                ['text' => 'Learn More Today'],
-            ],
-            'descriptions' => [
-                ['text' => substr($strategy['value_proposition'] ?? 'Professional service you can trust.', 0, 90)],
-                ['text' => 'Get started today. See results that matter for your business.'],
-            ],
+            'headlines'    => $headlines,
+            'descriptions' => $descriptions,
         ];
 
         $rsaSvc = new ResponsiveSearch();

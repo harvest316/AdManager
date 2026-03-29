@@ -46,6 +46,10 @@ try {
             $db->prepare('UPDATE ad_copy SET status = ?, feedback = ? WHERE id = ?')
                ->execute(['feedback', $_POST['feedback'] ?? '', $copyId]);
             break;
+        case 'unapprove_copy':
+            $db->prepare("UPDATE ad_copy SET status = 'draft', updated_at = datetime('now') WHERE id = ?")
+               ->execute([$copyId]);
+            break;
 
         // CV QA
         case 'run_qa':

@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
  *
  * Testing approach:
  *
- *  1. Constructor — test that it throws when KLING_API_KEY is absent.
+ *  1. Constructor — test that it throws when KLING_ACCESS_KEY/SECRET_KEY are absent.
  *  2. getStatus() normalisation logic — since getStatus() is public but calls
  *     private get(), we test it via a capturing subclass that overrides getStatus()
  *     to directly exercise only the normalisation logic (not the HTTP call).
@@ -29,22 +29,25 @@ use PHPUnit\Framework\TestCase;
  */
 class VideoGenTest extends TestCase
 {
-    private string $originalApiKey;
+    private string $originalAccessKey;
+    private string $originalSecretKey;
     private string $tmpDir;
 
     protected function setUp(): void
     {
-        $this->originalApiKey = (string)(getenv('KLING_API_KEY') ?: '');
-        $this->tmpDir         = sys_get_temp_dir() . '/videogen-test-' . uniqid();
+        $this->originalAccessKey = (string)(getenv('KLING_ACCESS_KEY') ?: '');
+        $this->originalSecretKey = (string)(getenv('KLING_SECRET_KEY') ?: '');
+        $this->tmpDir = sys_get_temp_dir() . '/videogen-test-' . uniqid();
         mkdir($this->tmpDir, 0755, true);
     }
 
     protected function tearDown(): void
     {
-        if ($this->originalApiKey !== '') {
-            putenv("KLING_API_KEY={$this->originalApiKey}");
+        if ($this->originalAccessKey !== '') {
+            putenv("KLING_ACCESS_KEY={$this->originalAccessKey}");
+            putenv("KLING_SECRET_KEY={$this->originalSecretKey}");
         } else {
-            putenv('KLING_API_KEY');
+            putenv('KLING_ACCESS_KEY'); putenv('KLING_SECRET_KEY');
         }
 
         foreach (glob("{$this->tmpDir}/*") ?: [] as $f) {
@@ -59,17 +62,17 @@ class VideoGenTest extends TestCase
 
     public function testConstructorThrowsWhenApiKeyNotSet(): void
     {
-        putenv('KLING_API_KEY');  // unset
+        putenv('KLING_ACCESS_KEY'); putenv('KLING_SECRET_KEY');  // unset
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessageMatches('/KLING_API_KEY not set/');
+        $this->expectExceptionMessageMatches('/KLING_ACCESS_KEY and KLING_SECRET_KEY must be set/');
 
         new VideoGen();
     }
 
     public function testConstructorSucceedsWhenApiKeyIsSet(): void
     {
-        putenv('KLING_API_KEY=test-key');
+        putenv('KLING_ACCESS_KEY=test-key'); putenv('KLING_SECRET_KEY=test-secret');
 
         $gen = new VideoGen();
         $this->assertInstanceOf(VideoGen::class, $gen);
@@ -77,7 +80,7 @@ class VideoGenTest extends TestCase
 
     public function testConstructorCreatesAssetsDirWhenMissing(): void
     {
-        putenv('KLING_API_KEY=test-key');
+        putenv('KLING_ACCESS_KEY=test-key'); putenv('KLING_SECRET_KEY=test-secret');
 
         $gen = new VideoGen();
 
@@ -320,7 +323,7 @@ class VideoGenTest extends TestCase
                 ?string $fakeVideoData,
                 string  $assetsDir,
             ) {
-                putenv('KLING_API_KEY=test-key');
+                putenv('KLING_ACCESS_KEY=test-key'); putenv('KLING_SECRET_KEY=test-secret');
                 parent::__construct();
 
                 $ref = new \ReflectionProperty(\AdManager\Creative\VideoGen::class, 'assetsDir');
@@ -335,7 +338,7 @@ class VideoGenTest extends TestCase
                 $this->videoAssetsDir = $assetsDir;
             }
 
-            public function generate(string $prompt, int $durationSeconds = 5, string $aspectRatio = '16:9'): string
+            public function generate(string $prompt, int $durationSeconds = 10, string $aspectRatio = '9:16'): string
             {
                 $payload = [
                     'prompt'       => $prompt,
@@ -535,7 +538,7 @@ class VideoGenTest extends TestCase
         $this->assertSame('9:16', $gen->capturedPostPayload['aspect_ratio']);
     }
 
-    public function testGenerateDefaultsToFiveSecondsAndSixteenByNine(): void
+    public function testGenerateDefaultsToTenSecondsAndNineBySixteen(): void
     {
         $gen = $this->makeVideoGenStub(
             postResponse: ['data' => []],
@@ -546,8 +549,8 @@ class VideoGenTest extends TestCase
             $gen->generate('Default params');
         } catch (\RuntimeException) {}
 
-        $this->assertSame(5, $gen->capturedPostPayload['duration']);
-        $this->assertSame('16:9', $gen->capturedPostPayload['aspect_ratio']);
+        $this->assertSame(10, $gen->capturedPostPayload['duration']);
+        $this->assertSame('9:16', $gen->capturedPostPayload['aspect_ratio']);
     }
 
     // -------------------------------------------------------------------------
