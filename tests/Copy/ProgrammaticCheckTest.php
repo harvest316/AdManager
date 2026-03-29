@@ -188,6 +188,187 @@ class ProgrammaticCheckTest extends TestCase
         $this->assertEquals('pass', ProgrammaticCheck::overallStatus([]));
     }
 
+    // Campaign-level: Rule 3 RSA count
+    public function testRSACountTooFewHeadlines(): void
+    {
+        $items = [];
+        for ($i = 1; $i <= 10; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'content' => "Headline {$i}"]);
+        }
+        for ($i = 11; $i <= 14; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'copy_type' => 'description', 'char_limit' => 90, 'content' => "Description {$i}"]);
+        }
+
+        $results = $this->checker->checkAll($items, 'TestBrand');
+        // Should have rsa_count fail on first item (only 10 headlines, need 15)
+        $allIssues = [];
+        foreach ($results as $r) $allIssues = array_merge($allIssues, $r['issues']);
+        $rsaIssues = array_filter($allIssues, fn($i) => $i['category'] === 'rsa_count');
+        $this->assertNotEmpty($rsaIssues);
+    }
+
+    public function testRSACountCorrect(): void
+    {
+        $items = [];
+        for ($i = 1; $i <= 15; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'content' => "Headline Number {$i}"]);
+        }
+        for ($i = 16; $i <= 19; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'copy_type' => 'description', 'char_limit' => 90, 'content' => "Description text {$i} here."]);
+        }
+
+        $results = $this->checker->checkAll($items, 'TestBrand');
+        $allIssues = [];
+        foreach ($results as $r) $allIssues = array_merge($allIssues, $r['issues']);
+        $rsaIssues = array_filter($allIssues, fn($i) => $i['category'] === 'rsa_count');
+        $this->assertEmpty($rsaIssues);
+    }
+
+    // Campaign-level: Rule 4 pin positions
+    public function testPinPositionWarningNoPinOne(): void
+    {
+        $items = [];
+        for ($i = 1; $i <= 15; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'content' => "Headline Number {$i}"]);
+        }
+        for ($i = 16; $i <= 19; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'copy_type' => 'description', 'char_limit' => 90, 'content' => "Description text {$i} here."]);
+        }
+
+        $results = $this->checker->checkAll($items, 'TestBrand');
+        $allIssues = [];
+        foreach ($results as $r) $allIssues = array_merge($allIssues, $r['issues']);
+        $pinIssues = array_filter($allIssues, fn($i) => $i['category'] === 'pin_position');
+        $this->assertNotEmpty($pinIssues, 'Should warn about no pin-1 headline');
+    }
+
+    // Campaign-level: Rule 12 brand presence
+    public function testBrandPresenceWarning(): void
+    {
+        $items = [];
+        for ($i = 1; $i <= 15; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'content' => "Generic Headline {$i}"]);
+        }
+        for ($i = 16; $i <= 19; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'copy_type' => 'description', 'char_limit' => 90, 'content' => "Description text {$i} here."]);
+        }
+
+        $results = $this->checker->checkAll($items, 'Colormora');
+        $allIssues = [];
+        foreach ($results as $r) $allIssues = array_merge($allIssues, $r['issues']);
+        $brandIssues = array_filter($allIssues, fn($i) => $i['category'] === 'brand_presence');
+        $this->assertNotEmpty($brandIssues, 'Should warn about missing brand name');
+    }
+
+    public function testBrandPresenceOk(): void
+    {
+        $items = [];
+        $items[] = $this->makeItem(['id' => 1, 'content' => 'Try Colormora Today', 'pin_position' => 1]);
+        $items[] = $this->makeItem(['id' => 2, 'content' => 'Colormora AI Pages']);
+        for ($i = 3; $i <= 15; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'content' => "Headline Number {$i}"]);
+        }
+        for ($i = 16; $i <= 19; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'copy_type' => 'description', 'char_limit' => 90, 'content' => "Description text {$i} here."]);
+        }
+
+        $results = $this->checker->checkAll($items, 'Colormora');
+        $allIssues = [];
+        foreach ($results as $r) $allIssues = array_merge($allIssues, $r['issues']);
+        $brandIssues = array_filter($allIssues, fn($i) => $i['category'] === 'brand_presence');
+        $this->assertEmpty($brandIssues);
+    }
+
+    // Campaign-level: Rule 13 CTA presence
+    public function testCTAPresenceWarning(): void
+    {
+        $items = [];
+        for ($i = 1; $i <= 15; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'content' => "Some Feature {$i}"]);
+        }
+        for ($i = 16; $i <= 19; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'copy_type' => 'description', 'char_limit' => 90, 'content' => "Description text {$i} here."]);
+        }
+
+        $results = $this->checker->checkAll($items, 'TestBrand');
+        $allIssues = [];
+        foreach ($results as $r) $allIssues = array_merge($allIssues, $r['issues']);
+        $ctaIssues = array_filter($allIssues, fn($i) => $i['category'] === 'cta_presence');
+        $this->assertNotEmpty($ctaIssues, 'Should warn about missing CTA');
+    }
+
+    public function testCTAPresenceOk(): void
+    {
+        $items = [];
+        $items[] = $this->makeItem(['id' => 1, 'content' => 'Try It Today']);
+        for ($i = 2; $i <= 15; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'content' => "Some Feature {$i}"]);
+        }
+        for ($i = 16; $i <= 19; $i++) {
+            $items[] = $this->makeItem(['id' => $i, 'copy_type' => 'description', 'char_limit' => 90, 'content' => "Description text {$i} here."]);
+        }
+
+        $results = $this->checker->checkAll($items, 'TestBrand');
+        $allIssues = [];
+        foreach ($results as $r) $allIssues = array_merge($allIssues, $r['issues']);
+        $ctaIssues = array_filter($allIssues, fn($i) => $i['category'] === 'cta_presence');
+        $this->assertEmpty($ctaIssues);
+    }
+
+    // Rule 7: Locale spelling
+    public function testLocaleSpellingUSinAU(): void
+    {
+        $item = $this->makeItem(['content' => 'Personalized Pages']);
+        $results = $this->checker->checkAll([$item], 'TestBrand', 'AU');
+        $issues = $results[1]['issues'];
+        $locale = array_filter($issues, fn($i) => $i['category'] === 'locale');
+        $this->assertNotEmpty($locale, 'US spelling in AU market should warn');
+    }
+
+    public function testLocaleSpellingCorrectForMarket(): void
+    {
+        $item = $this->makeItem(['content' => 'Personalised Pages']);
+        $results = $this->checker->checkAll([$item], 'TestBrand', 'AU');
+        $issues = $results[1]['issues'];
+        $locale = array_filter($issues, fn($i) => $i['category'] === 'locale');
+        $this->assertEmpty($locale);
+    }
+
+    // Rule 11: Phone in headline
+    public function testPhoneInHeadline(): void
+    {
+        $item = $this->makeItem(['content' => 'Call 1300-555-123']);
+        $results = $this->checker->checkAll([$item], 'TestBrand');
+        $issues = $results[1]['issues'];
+        $phone = array_filter($issues, fn($i) => $i['category'] === 'phone_in_headline');
+        $this->assertNotEmpty($phone);
+    }
+
+    public function testPhoneInDescriptionIgnored(): void
+    {
+        $item = $this->makeItem(['copy_type' => 'description', 'char_limit' => 90, 'content' => 'Call us at 1300-555-123 today.']);
+        $results = $this->checker->checkAll([$item], 'TestBrand');
+        $issues = $results[1]['issues'];
+        $phone = array_filter($issues, fn($i) => $i['category'] === 'phone_in_headline');
+        $this->assertEmpty($phone, 'Phone numbers in descriptions should not trigger headline rule');
+    }
+
+    // Meta copy items should skip campaign-level checks
+    public function testMetaCopySkipsCampaignRules(): void
+    {
+        $item = $this->makeItem([
+            'platform' => 'meta',
+            'campaign_name' => null,
+            'copy_type' => 'primary_text',
+            'char_limit' => 2000,
+            'content' => 'This is a meta primary text that is longer than a headline.',
+        ]);
+        $results = $this->checker->checkAll([$item], 'TestBrand');
+        $issues = $results[1]['issues'];
+        $rsaIssues = array_filter($issues, fn($i) => $i['category'] === 'rsa_count');
+        $this->assertEmpty($rsaIssues, 'Meta items should not trigger RSA count rules');
+    }
+
     // Campaign-level: Rule 5 duplicates
     public function testDuplicateHeadlines(): void
     {

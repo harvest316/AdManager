@@ -213,4 +213,68 @@ class StoreTest extends TestCase
         $approved = $this->store->getApprovedByPlatform('meta');
         $this->assertEmpty($approved);
     }
+
+    public function testListByProjectWithCopyTypeFilter(): void
+    {
+        $this->store->bulkInsert(1, 1, $this->sampleItems());
+        $headlines = $this->store->listByProject(1, null, 'headline');
+        $this->assertCount(2, $headlines);
+
+        $descriptions = $this->store->listByProject(1, null, 'description');
+        $this->assertCount(1, $descriptions);
+    }
+
+    public function testListByProjectWithPlatformFilter(): void
+    {
+        $this->store->bulkInsert(1, 1, $this->sampleItems());
+        $google = $this->store->listByProject(1, null, null, 'google');
+        $this->assertCount(3, $google);
+
+        $meta = $this->store->listByProject(1, null, null, 'meta');
+        $this->assertEmpty($meta);
+    }
+
+    public function testListByProjectWithMultipleFilters(): void
+    {
+        $ids = $this->store->bulkInsert(1, 1, $this->sampleItems());
+        $this->store->approve($ids[0]);
+
+        $result = $this->store->listByProject(1, 'approved', 'headline', 'google');
+        $this->assertCount(1, $result);
+    }
+
+    public function testSetStatus(): void
+    {
+        $ids = $this->store->bulkInsert(1, 1, $this->sampleItems());
+        $this->store->setStatus($ids[0], 'proofread');
+        $item = $this->store->getById($ids[0]);
+        $this->assertEquals('proofread', $item['status']);
+    }
+
+    public function testSetStatusFlagged(): void
+    {
+        $ids = $this->store->bulkInsert(1, 1, $this->sampleItems());
+        $this->store->setStatus($ids[0], 'flagged');
+        $item = $this->store->getById($ids[0]);
+        $this->assertEquals('flagged', $item['status']);
+    }
+
+    public function testBulkInsertWithLanguageAndMarket(): void
+    {
+        $items = [[
+            'platform' => 'google',
+            'campaign_name' => 'Test',
+            'ad_group_name' => null,
+            'copy_type' => 'headline',
+            'content' => 'Test DE',
+            'char_limit' => 30,
+            'pin_position' => null,
+            'language' => 'de',
+            'target_market' => 'DE',
+        ]];
+        $ids = $this->store->bulkInsert(1, 1, $items);
+        $item = $this->store->getById($ids[0]);
+        $this->assertEquals('de', $item['language']);
+        $this->assertEquals('DE', $item['target_market']);
+    }
 }
