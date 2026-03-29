@@ -227,6 +227,7 @@ table.ct td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--borde
      <div class="cc"><?=e($c['content'])?></div>
      <div class="cmeta">
       <span style="color:var(--t2)"><?=e($c['platform'])?></span>
+      <?php if(!empty($c['target_market']) && $c['target_market'] !== 'all'): ?><span class="cpin"><?=e($c['target_market'])?></span><?php endif; ?>
       <?php if($c['pin_position']): ?><span class="cpin">PIN <?=$c['pin_position']?></span><?php endif; ?>
       <span style="float:right">#<?=$c['id']?> &middot; <?=mb_strlen($c['content'])?> chars</span>
      </div>
