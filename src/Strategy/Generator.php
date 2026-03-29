@@ -150,6 +150,11 @@ class Generator
             }
         }
 
+        // Build locale instruction from target markets
+        $targetMarkets = $context['target_markets'] ?? 'Australia (English)';
+        $primaryMarket = strtoupper(explode(' ', explode(',', $targetMarkets)[0])[0]);
+        $localeInstruction = \AdManager\Locale::promptInstruction($primaryMarket);
+
         // Replace placeholders — new template vars
         $replacements = [
             '{{PROJECT_NAME}}'           => $project['display_name'] ?: $project['name'],
@@ -161,7 +166,8 @@ class Generator
             '{{PRIMARY_PERSONA}}'        => $context['primary_persona'] ?? 'Not specified — infer from site analysis',
             '{{PRIMARY_CONVERSION}}'     => $context['primary_conversion'] ?? 'purchase',
             '{{SECONDARY_CONVERSIONS}}'  => $context['secondary_conversions'] ?? 'sign_up, add_to_cart',
-            '{{TARGET_MARKETS}}'         => $context['target_markets'] ?? 'Australia (English)',
+            '{{TARGET_MARKETS}}'         => $targetMarkets,
+            '{{LOCALE_INSTRUCTION}}'     => $localeInstruction,
             '{{DATE}}'                   => date('Y-m-d'),
             '{{CONTEXT}}'               => $contextText,
         ];

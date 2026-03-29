@@ -14,7 +14,9 @@ Generate a comprehensive paid media strategy for the following:
 
 {{CONTEXT}}
 
-Generate the strategy in this exact structure. Every section is required. Do not leave placeholders — provide specific, actionable recommendations based on the inputs above.
+**Locale instruction:** {{LOCALE_INSTRUCTION}}
+
+Generate the strategy in this exact structure. Every section is required. Do not leave placeholders — provide specific, actionable recommendations based on the inputs above. All ad copy in the strategy MUST follow the locale instruction above.
 
 ---
 
