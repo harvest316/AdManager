@@ -31,6 +31,7 @@ class Reports
                 metrics.average_cpc,
                 metrics.cost_micros,
                 metrics.conversions,
+                metrics.conversions_value,
                 metrics.cost_per_conversion,
                 metrics.search_impression_share,
                 metrics.search_budget_lost_impression_share,
@@ -139,7 +140,8 @@ class Reports
                 metrics.clicks,
                 metrics.ctr,
                 metrics.cost_micros,
-                metrics.conversions
+                metrics.conversions,
+                metrics.conversions_value
             FROM ad_group_ad
             WHERE segments.date DURING {$dateRange}
               AND ad_group_ad.status != 'REMOVED'

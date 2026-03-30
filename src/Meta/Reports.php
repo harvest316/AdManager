@@ -22,6 +22,7 @@ class Reports
         'cpm',
         'spend',
         'actions',
+        'action_values',
         'cost_per_action_type',
         'frequency',
         'reach',

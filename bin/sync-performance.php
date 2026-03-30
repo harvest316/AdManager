@@ -146,7 +146,7 @@ function syncGoogle(array $campaigns, int $days): int
             'clicks'           => $m->getClicks(),
             'cost_micros'      => $m->getCostMicros(),
             'conversions'      => $m->getConversions(),
-            'conversion_value' => 0,
+            'conversion_value' => $m->getConversionsValue(),
         ]);
         $synced++;
     }
@@ -191,7 +191,7 @@ function syncGoogle(array $campaigns, int $days): int
             'clicks'           => $m->getClicks(),
             'cost_micros'      => $m->getCostMicros(),
             'conversions'      => $m->getConversions(),
-            'conversion_value' => 0,
+            'conversion_value' => $m->getConversionsValue(),
         ]);
         $synced++;
     }
@@ -224,13 +224,22 @@ function syncMeta(array $campaigns, int $days): int
         foreach ($insights as $insight) {
             $date = $insight['date_start'] ?? date('Y-m-d');
 
-            // Extract conversions from actions array
+            // Extract conversions and values from actions / action_values arrays
             $conversions     = 0;
             $conversionValue = 0;
+            $conversionTypes = ['offsite_conversion.fb_pixel_purchase', 'offsite_conversion.fb_pixel_lead',
+                                'offsite_conversion', 'lead', 'purchase'];
             if (!empty($insight['actions'])) {
                 foreach ($insight['actions'] as $action) {
-                    if (in_array($action['action_type'] ?? '', ['offsite_conversion', 'lead', 'purchase'])) {
+                    if (in_array($action['action_type'] ?? '', $conversionTypes)) {
                         $conversions += (float) ($action['value'] ?? 0);
+                    }
+                }
+            }
+            if (!empty($insight['action_values'])) {
+                foreach ($insight['action_values'] as $av) {
+                    if (in_array($av['action_type'] ?? '', $conversionTypes)) {
+                        $conversionValue += (float) ($av['value'] ?? 0);
                     }
                 }
             }
