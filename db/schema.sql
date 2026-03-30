@@ -299,3 +299,28 @@ CREATE TABLE IF NOT EXISTS ga4_performance (
   synced_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_ga4_project_date ON ga4_performance(project_id, date);
+
+-- Conversion actions (DR-109)
+
+CREATE TABLE IF NOT EXISTS conversion_actions (
+  id INTEGER PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  name TEXT NOT NULL,
+  event_name TEXT NOT NULL,
+  platform TEXT NOT NULL,            -- google | meta | ga4
+  category TEXT NOT NULL,            -- PURCHASE | LEAD | SIGNUP | PAGE_VIEW | ADD_TO_CART | BEGIN_CHECKOUT | CONTACT
+  is_primary INTEGER DEFAULT 1,
+  trigger_type TEXT,                 -- url_match | click | dataLayer | custom_event
+  trigger_value TEXT,
+  default_value REAL DEFAULT 0,
+  external_id TEXT,
+  status TEXT DEFAULT 'planned',     -- planned | created | verified | failed
+  verification_note TEXT,
+  verified_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_actions_project ON conversion_actions(project_id);
+CREATE INDEX IF NOT EXISTS idx_conv_actions_platform ON conversion_actions(platform);
+CREATE INDEX IF NOT EXISTS idx_conv_actions_status ON conversion_actions(status);

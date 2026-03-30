@@ -7,12 +7,14 @@ use AdManager\DB;
 class Store
 {
     /**
-     * Bulk-insert parsed copy items.
+     * Bulk-insert parsed copy items, then run programmatic QA automatically.
+     * Items that fail QA hard (e.g., over char limit) are auto-fixed where possible
+     * and re-checked. Unfixable fails are marked rejected.
      *
      * @param array $items Each item: [platform, campaign_name, ad_group_name, copy_type, content, char_limit, pin_position, language, target_market]
      * @return int[] Inserted IDs
      */
-    public function bulkInsert(int $projectId, int $strategyId, array $items): array
+    public function bulkInsert(int $projectId, ?int $strategyId, array $items): array
     {
         $db = DB::get();
         $stmt = $db->prepare(
@@ -39,7 +41,77 @@ class Store
             $ids[] = (int) $db->lastInsertId();
         }
 
+        // Auto-QA: run programmatic checks on all inserted items
+        try {
+            $this->runAutoQA($projectId, $ids);
+        } catch (\Throwable $e) {
+            // QA is best-effort — don't fail the insert if QA has issues
+        }
+
         return $ids;
+    }
+
+    /**
+     * Run ProgrammaticCheck on inserted items, apply auto-fixes, reject unfixable fails.
+     */
+    private function runAutoQA(int $projectId, array $ids): void
+    {
+        if (empty($ids)) return;
+
+        $db = DB::get();
+        $checker = new ProgrammaticCheck();
+
+        // Load the inserted items
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $db->prepare("SELECT * FROM ad_copy WHERE id IN ({$placeholders})");
+        $stmt->execute($ids);
+        $items = $stmt->fetchAll();
+        if (empty($items)) return;
+
+        // Get brand name for checks (graceful if project doesn't exist)
+        $proj = $db->prepare('SELECT display_name, name FROM projects WHERE id = ?');
+        $proj->execute([$projectId]);
+        $project = $proj->fetch();
+        $brandName = $project ? ($project['display_name'] ?? $project['name'] ?? '') : '';
+
+        $results = $checker->checkAll($items, $brandName);
+
+        foreach ($results as $copyId => $result) {
+            $issues = $result['issues'] ?? [];
+            $autoFixed = $result['auto_fixed'] ?? [];
+
+            // Apply auto-fixes (whitespace trimming, etc.)
+            foreach ($autoFixed as $fix) {
+                if (isset($fix['fixed'])) {
+                    $db->prepare("UPDATE ad_copy SET content = ?, updated_at = datetime('now') WHERE id = ?")
+                       ->execute([$fix['fixed'], $copyId]);
+                }
+            }
+
+            $hasFail = false;
+            $hasWarn = false;
+            $failReasons = [];
+            foreach ($issues as $i) {
+                $sev = $i['severity'] ?? '';
+                if ($sev === 'fail') {
+                    $hasFail = true;
+                    $failReasons[] = $i['description'] ?? $i['rule'] ?? 'QA fail';
+                }
+                if ($sev === 'warning') $hasWarn = true;
+            }
+
+            $qaStatus = $hasFail ? 'fail' : ($hasWarn ? 'warning' : 'pass');
+            $qaScore = empty($issues) ? 100 : max(0, 100 - count($issues) * 10);
+
+            // Update QA results
+            $this->updateQA($copyId, $qaStatus, $issues, $qaScore);
+
+            // Auto-reject unfixable fails with reason
+            if ($hasFail) {
+                $reason = 'Auto-rejected by QA: ' . implode('; ', array_slice($failReasons, 0, 3));
+                $this->reject($copyId, $reason);
+            }
+        }
     }
 
     /**

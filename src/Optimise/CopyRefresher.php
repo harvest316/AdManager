@@ -114,7 +114,7 @@ class CopyRefresher
         unset($r);
 
         // Step 3: Insert into DB
-        $strategyId = $options['strategy_id'] ?? 0;
+        $strategyId = $options['strategy_id'] ?? null;
         $ids = $this->store->bulkInsert($projectId, $strategyId, $replacements);
 
         // Step 4: Programmatic checks
