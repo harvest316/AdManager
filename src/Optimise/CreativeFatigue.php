@@ -92,6 +92,15 @@ class CreativeFatigue
         // Sort by severity (most negative slope first)
         usort($fatigued, fn($a, $b) => $a['trend_slope'] <=> $b['trend_slope']);
 
+        // Log each fatigued ad to changelog
+        foreach ($fatigued as $f) {
+            \AdManager\Dashboard\Changelog::log(
+                $projectId, 'creative', 'fatigue_detected',
+                "Ad #{$f['ad_id']} flagged for creative fatigue ({$f['severity']}): CTR slope {$f['trend_slope']}%/day over {$f['days_declining']}d. {$f['recommendation']}",
+                $f, 'ad', $f['ad_id'], 'optimiser'
+            );
+        }
+
         return $fatigued;
     }
 

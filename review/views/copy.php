@@ -27,11 +27,27 @@ foreach ($statuses as $k => $v) { if ($k !== '') $statusCounts[$k] = $copyCounts
 $langParam = $langFilter ? '&lang=' . e($langFilter) : '';
 ?>
 
-<div class="fbar">
+<div class="fbar" style="justify-content:space-between">
+ <div style="display:flex;flex-wrap:wrap;gap:8px">
  <?php foreach ($statuses as $k => $v): $on = ($statusFilter ?? '') === $k; $href = "?view=copy&project={$projectId}" . ($k ? "&status={$k}" : '') . $langParam; $c = $k === '' ? ($statusCounts['all'] ?? 0) : ($statusCounts[$k] ?? 0); ?>
  <a href="<?= $href ?>" class="fb <?= $on ? 'on' : '' ?>" style="color:<?= $v['color'] ?>;background:<?= $v['bg'] ?>"><?= $v['label'] ?> <span class="fc"><?= $c ?></span></a>
  <?php endforeach; ?>
+ </div>
+ <?php $draftCount = $copyCounts['draft'] ?? 0; $proofCount = $copyCounts['proofread'] ?? 0; ?>
+ <?php if ($draftCount > 0 || $proofCount > 0): ?>
+ <button class="btn btn-q btn-sm" id="proofBtn" onclick="runProofread()" style="flex:none">LLM Proofread (<?= $draftCount + $proofCount ?>)</button>
+ <?php endif; ?>
 </div>
+
+<script>
+function runProofread() {
+    var btn = document.getElementById('proofBtn');
+    btn.disabled = true; btn.textContent = 'Proofreading...';
+    act('proofread_batch', {project_id: <?= $projectId ?>, copy_status: 'draft', market: 'AU'});
+    // This takes 30-120s — poll isn't needed, just wait and reload
+    setTimeout(function() { location.reload(); }, 5000);
+}
+</script>
 
 <?php if (!empty($langCounts)): ?>
 <?php $statusParam = $statusFilter ? '&status=' . e($statusFilter) : ''; ?>

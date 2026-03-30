@@ -184,12 +184,22 @@ class CopyRefresher
             $this->store->reject((int) $w['id'], 'Replaced by CopyRefresher: underperforming');
         }
 
-        return [
+        $result = [
             'weak_found' => count($weak),
             'generated'  => count($replacements),
             'approved'   => $approved,
             'review'     => $review,
         ];
+
+        // Log to changelog
+        \AdManager\Dashboard\Changelog::log(
+            $projectId, 'creative', 'refreshed',
+            "Copy refresh '{$campaignName}': {$result['weak_found']} weak, {$result['generated']} generated, {$result['approved']} approved, {$result['review']} review",
+            array_merge($result, ['campaign_name' => $campaignName]),
+            null, null, 'optimiser'
+        );
+
+        return $result;
     }
 
     /**

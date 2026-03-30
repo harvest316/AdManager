@@ -1,0 +1,27 @@
+{
+  "name": "admanager",
+  "version": "1.0.0",
+  "description": "Google Ads API management tool for Audit&Fix. Handles all campaign types, keywords, negative keywords, RSAs, and reporting.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harvest316/AdManager.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/harvest316/AdManager/issues"
+  },
+  "homepage": "https://github.com/harvest316/AdManager#readme",
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
+}

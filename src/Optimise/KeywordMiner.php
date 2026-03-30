@@ -113,12 +113,24 @@ class KeywordMiner
             }
         }
 
-        return [
+        $result = [
             'add_keywords'  => $addKeywords,
             'add_negatives' => $addNegatives,
             'expansion'     => $expansion,
             'total_terms'   => count($termData),
         ];
+
+        // Log summary to changelog
+        if (!empty($addKeywords) || !empty($addNegatives) || !empty($expansion)) {
+            \AdManager\Dashboard\Changelog::log(
+                $projectId, 'keyword', 'mined',
+                sprintf('Keyword mining: %d to add, %d negatives, %d expansion candidates from %d search terms',
+                    count($addKeywords), count($addNegatives), count($expansion), count($termData)),
+                $result, null, null, 'optimiser'
+            );
+        }
+
+        return $result;
     }
 
     /**

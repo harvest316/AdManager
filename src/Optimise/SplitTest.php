@@ -238,14 +238,22 @@ class SplitTest
             $paused[] = $adId;
         }
 
-        error_log(sprintf(
-            '[SplitTest] Concluded test %d (winner: ad %d). Paused %d losing ad(s): [%s]%s',
-            $splitTestId,
-            $winnerAdId,
-            count($paused),
+        $summary = sprintf(
+            'Split test #%d concluded: ad %d wins. Paused %d losing ad(s): [%s]%s',
+            $splitTestId, $winnerAdId, count($paused),
             implode(', ', $paused),
             $errors ? ' Errors: ' . implode('; ', $errors) : ''
-        ));
+        );
+        error_log('[SplitTest] ' . $summary);
+
+        // Log to changelog
+        if ($test['project_id']) {
+            \AdManager\Dashboard\Changelog::log(
+                (int) $test['project_id'], 'split_test', 'concluded', $summary,
+                ['test_id' => $splitTestId, 'winner_ad_id' => $winnerAdId, 'paused' => $paused, 'errors' => $errors],
+                'split_test', $splitTestId, 'optimiser'
+            );
+        }
 
         return ['paused' => $paused, 'errors' => $errors];
     }

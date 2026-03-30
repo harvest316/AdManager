@@ -219,6 +219,17 @@ class BudgetAllocator
             }
 
             $updated[] = $campaignId;
+
+            // Log to changelog
+            $oldBudget = $rec['current_budget'] ?? 0;
+            $change = round($recommendedAud - $oldBudget, 2);
+            $dir = $change > 0 ? 'Increased' : 'Decreased';
+            \AdManager\Dashboard\Changelog::log(
+                $projectId, 'budget', 'reallocated',
+                "{$dir} '{$rec['campaign_name']}' budget: \${$oldBudget}/day -> \${$recommendedAud}/day. {$rec['reason']}",
+                ['campaign_id' => $campaignId, 'old' => $oldBudget, 'new' => $recommendedAud, 'reason' => $rec['reason']],
+                'campaign', $campaignId, 'optimiser'
+            );
         }
 
         return ['updated' => $updated, 'errors' => $errors];

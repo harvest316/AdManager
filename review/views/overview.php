@@ -8,6 +8,7 @@ if (!in_array($days, [7, 14, 30])) $days = 7;
 
 $summary = PerformanceQuery::projectSummary($projectId, $days);
 $campaigns = PerformanceQuery::campaignBreakdown($projectId, 14);
+$dailySeries = PerformanceQuery::dailySeries($projectId, $days);
 $goals = PerformanceQuery::goalsStatus($projectId, 14);
 $syncStatus = PerformanceQuery::syncStatus($projectId);
 $recentChanges = Changelog::list($projectId, null, 5);
@@ -146,6 +147,107 @@ function deltaHtml(array $d, bool $lowerIsBetter = false): string {
   <div class="lb"><?= deltaHtml($del['ctr']) ?> vs prior</div>
  </div>
 </div>
+
+<!-- Spend & Conversions Chart -->
+<?php if (!empty($dailySeries)): ?>
+<div class="sec">
+ <div class="sec-t">Performance Trend</div>
+ <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;height:220px">
+  <canvas id="perfChart"></canvas>
+ </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var data = <?= json_encode($dailySeries) ?>;
+    var labels = data.map(function(d) { return d.date.substring(5); }); // MM-DD
+    var spendData = data.map(function(d) { return d.cost; });
+    var convData = data.map(function(d) { return d.conversions; });
+    var clickData = data.map(function(d) { return d.clicks; });
+
+    new Chart(document.getElementById('perfChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Spend ($)',
+                    data: spendData,
+                    borderColor: '#3fb950',
+                    backgroundColor: 'rgba(63,185,80,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    yAxisID: 'y',
+                },
+                {
+                    label: 'Clicks',
+                    data: clickData,
+                    borderColor: '#58a6ff',
+                    backgroundColor: 'transparent',
+                    borderDash: [4, 4],
+                    tension: 0.3,
+                    pointRadius: 2,
+                    yAxisID: 'y1',
+                },
+                {
+                    label: 'Conversions',
+                    data: convData,
+                    borderColor: '#d29922',
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointStyle: 'rectRounded',
+                    yAxisID: 'y1',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: {
+                    labels: { color: '#8b949e', usePointStyle: true, padding: 16, font: { size: 11 } }
+                },
+                tooltip: {
+                    backgroundColor: '#161b22',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    titleColor: '#e6edf3',
+                    bodyColor: '#8b949e',
+                    callbacks: {
+                        label: function(ctx) {
+                            if (ctx.dataset.label === 'Spend ($)') return 'Spend: $' + ctx.parsed.y.toFixed(2);
+                            return ctx.dataset.label + ': ' + ctx.parsed.y;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(48,54,61,0.5)' },
+                    ticks: { color: '#6e7681', font: { size: 10 } }
+                },
+                y: {
+                    position: 'left',
+                    grid: { color: 'rgba(48,54,61,0.3)' },
+                    ticks: { color: '#3fb950', font: { size: 10 }, callback: function(v) { return '$' + v; } },
+                    title: { display: false }
+                },
+                y1: {
+                    position: 'right',
+                    grid: { drawOnChartArea: false },
+                    ticks: { color: '#58a6ff', font: { size: 10 }, stepSize: 1 },
+                    title: { display: false }
+                }
+            }
+        }
+    });
+})();
+</script>
+<?php endif; ?>
 
 <!-- Goals -->
 <?php if (!empty($goals)): ?>

@@ -145,7 +145,7 @@ class Analyser
             }
         }
 
-        return [
+        $result = [
             'project'         => $project['name'],
             'period_days'     => $days,
             'performance'     => $actualMetrics,
@@ -153,6 +153,20 @@ class Analyser
             'recommendations' => $recommendations,
             'alerts'          => $alerts,
         ];
+
+        // Log to changelog if there are actionable items
+        if (!empty($alerts) || !empty($recommendations)) {
+            \AdManager\Dashboard\Changelog::log(
+                $projectId, 'system', 'analysed',
+                sprintf('Analysis (%dd): %d alerts, %d recommendations. %s',
+                    $days, count($alerts), count($recommendations),
+                    !empty($alerts) ? $alerts[0] : ''),
+                ['alerts' => $alerts, 'recommendations' => $recommendations, 'metrics' => $actualMetrics],
+                null, null, 'optimiser'
+            );
+        }
+
+        return $result;
     }
 
     /**

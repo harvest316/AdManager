@@ -96,7 +96,8 @@ if ($projectId) {
 <!-- Conversion Actions -->
 <div class="sec">
  <div class="sec-t">Conversion Actions
-  <button class="btn btn-a btn-sm" style="margin-left:auto" onclick="planConversions()">Auto-Plan</button>
+  <button class="btn btn-q btn-sm" style="margin-left:auto" onclick="verifyConversions()">Verify</button>
+  <button class="btn btn-a btn-sm" onclick="planConversions()">Auto-Plan</button>
  </div>
 
  <?php if (!empty($conversionActions)): ?>
@@ -200,5 +201,12 @@ function provisionAction(actionId) {
     if (!confirm('Create this conversion action on the platform?')) return;
     act('conversion_provision', {action_id: actionId, project_id: <?= $projectId ?>});
     setTimeout(function() { location.reload(); }, 1500);
+}
+
+function verifyConversions() {
+    toast('Verifying conversions (Playwright)...', 'i');
+    act('conversion_verify', {project_id: <?= $projectId ?>});
+    // Playwright takes 10-30s
+    setTimeout(function() { location.reload(); }, 15000);
 }
 </script>

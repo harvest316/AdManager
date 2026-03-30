@@ -226,6 +226,71 @@ try {
 
         // ── Conversion actions ──────────────────────────────────
 
+        // ── LLM Proofreading ────────────────────────────────────
+
+        case 'proofread_batch':
+            // Run LLM proofreading on draft/proofread copy items
+            $strategyId = (int) ($_POST['strategy_id'] ?? 0);
+            $status = $_POST['copy_status'] ?? 'draft'; // draft or proofread
+            $market = $_POST['market'] ?? 'AU';
+
+            $copyStore = new \AdManager\Copy\Store();
+            $items = $copyStore->listByProject($projectId, $status);
+            if (empty($items)) {
+                $result = ['ok' => true, 'message' => "No {$status} items to proofread"];
+                break;
+            }
+
+            // Get project + strategy context
+            $projRow = $db->prepare('SELECT * FROM projects WHERE id = ?');
+            $projRow->execute([$projectId]);
+            $projectData = $projRow->fetch();
+
+            $stratRow = ['target_audience' => '', 'value_proposition' => '', 'tone' => ''];
+            if ($strategyId) {
+                $s = $db->prepare('SELECT * FROM strategies WHERE id = ?');
+                $s->execute([$strategyId]);
+                $stratRow = $s->fetch() ?: $stratRow;
+            }
+
+            // Run proofreader (this calls Claude — takes 30-120s)
+            $proofreader = new \AdManager\Copy\Proofreader();
+            $llmResult = $proofreader->proofread($items, $projectData, $stratRow, $market);
+
+            $approved = 0;
+            $review = 0;
+            $rejected = 0;
+
+            if ($llmResult && !empty($llmResult['items'])) {
+                foreach ($llmResult['items'] as $item) {
+                    $id = (int) $item['id'];
+                    $score = (int) ($item['score'] ?? 0);
+                    $verdict = $item['verdict'] ?? 'warning';
+                    $issues = $item['issues'] ?? [];
+
+                    $copyStore->updateQA($id, $verdict, $issues, $score);
+
+                    if ($score >= 70 && $verdict !== 'fail') {
+                        $copyStore->approve($id);
+                        $approved++;
+                    } elseif ($score >= 50) {
+                        $copyStore->setStatus($id, 'proofread');
+                        $review++;
+                    } else {
+                        $copyStore->reject($id, 'LLM proofreader: score ' . $score);
+                        $rejected++;
+                    }
+                }
+            }
+
+            Changelog::log($projectId, 'creative', 'proofread',
+                "LLM proofread: {$approved} approved, {$review} review, {$rejected} rejected (score: " . ($llmResult['overall_score'] ?? '?') . ")",
+                ['approved' => $approved, 'review' => $review, 'rejected' => $rejected, 'overall_score' => $llmResult['overall_score'] ?? null],
+                null, null, 'optimiser');
+
+            $result = ['ok' => true, 'approved' => $approved, 'review' => $review, 'rejected' => $rejected, 'overall_score' => $llmResult['overall_score'] ?? null];
+            break;
+
         case 'conversion_plan':
             $planner = new ConversionPlanner();
             $plan = $planner->plan($projectId);
@@ -241,6 +306,12 @@ try {
             $actionId = (int) ($_POST['action_id'] ?? 0);
             $planner = new ConversionPlanner();
             $result = $planner->provision($actionId);
+            break;
+
+        case 'conversion_verify':
+            $verifier = new \AdManager\Dashboard\ConversionVerifier();
+            $report = $verifier->verify($projectId);
+            $result = $report;
             break;
 
         default:
