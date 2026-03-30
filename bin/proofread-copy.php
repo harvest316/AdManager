@@ -67,6 +67,7 @@ USAGE;
 $projectName = $args['project'];
 $strategyId = (int) $args['strategy'];
 $force = isset($args['force']);
+$jobId = isset($args['job-id']) ? (int) $args['job-id'] : null;
 $skipLLM = isset($args['skip-llm']);
 $market = $args['market'] ?? 'all';
 
@@ -270,3 +271,12 @@ foreach ($counts as $status => $count) {
 }
 echo "\nReview copy in the dashboard:\n";
 echo "  http://localhost:8080/?project={$project['id']}&tab=copy\n";
+
+// Mark background job complete (if launched via dashboard proofread_batch)
+if ($jobId) {
+    DB::init();
+    DB::get()->prepare(
+        "UPDATE sync_jobs SET status = 'complete', completed_at = datetime('now') WHERE id = ?"
+    )->execute([$jobId]);
+    echo "\nJob #{$jobId} marked complete.\n";
+}

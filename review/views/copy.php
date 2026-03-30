@@ -42,10 +42,44 @@ $langParam = $langFilter ? '&lang=' . e($langFilter) : '';
 <script>
 function runProofread() {
     var btn = document.getElementById('proofBtn');
-    btn.disabled = true; btn.textContent = 'Proofreading...';
-    act('proofread_batch', {project_id: <?= $projectId ?>, copy_status: 'draft', market: 'AU'});
-    // This takes 30-120s — poll isn't needed, just wait and reload
-    setTimeout(function() { location.reload(); }, 5000);
+    btn.disabled = true;
+    btn.textContent = 'Starting…';
+
+    var f = new FormData();
+    f.append('action', 'proofread_batch');
+    f.append('project_id', <?= $projectId ?>);
+    f.append('copy_status', 'draft');
+    f.append('market', 'AU');
+
+    fetch('api.php', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body:f})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+        if (!j.ok) { toast(j.error || 'Failed to start', 'e'); btn.disabled = false; btn.textContent = 'LLM Proofread'; return; }
+        if (!j.async) { toast('Proofread complete', 's'); setTimeout(function(){ location.reload(); }, 800); return; }
+        // Background job started — poll for completion
+        btn.textContent = 'Proofreading (0s)…';
+        var start = Date.now();
+        var jobId = j.job_id;
+        var pollInterval = setInterval(function(){
+            var elapsed = Math.round((Date.now() - start) / 1000);
+            btn.textContent = 'Proofreading (' + elapsed + 's)…';
+
+            var pf = new FormData();
+            pf.append('action', 'proofread_poll');
+            pf.append('job_id', jobId);
+            pf.append('project_id', <?= $projectId ?>);
+
+            fetch('api.php', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body:pf})
+            .then(function(r){ return r.json(); })
+            .then(function(p){
+                if (p.done) {
+                    clearInterval(pollInterval);
+                    toast('Proofread complete (' + elapsed + 's)', 's');
+                    setTimeout(function(){ location.reload(); }, 800);
+                }
+            }).catch(function(){});
+        }, 3000);
+    }).catch(function(){ toast('Network error', 'e'); btn.disabled = false; btn.textContent = 'LLM Proofread'; });
 }
 </script>
 

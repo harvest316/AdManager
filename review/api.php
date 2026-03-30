@@ -229,66 +229,90 @@ try {
         // ── LLM Proofreading ────────────────────────────────────
 
         case 'proofread_batch':
-            // Run LLM proofreading on draft/proofread copy items
+            // Launch LLM proofreading as a background job (Claude takes 30-120s;
+            // running synchronously would block the single-threaded PHP dev server).
             $strategyId = (int) ($_POST['strategy_id'] ?? 0);
-            $status = $_POST['copy_status'] ?? 'draft'; // draft or proofread
-            $market = $_POST['market'] ?? 'AU';
+            $copyStatus = $_POST['copy_status'] ?? 'draft';
+            $market     = $_POST['market'] ?? 'AU';
 
-            $copyStore = new \AdManager\Copy\Store();
-            $items = $copyStore->listByProject($projectId, $status);
-            if (empty($items)) {
-                $result = ['ok' => true, 'message' => "No {$status} items to proofread"];
-                break;
+            if (!$projectId) throw new \RuntimeException('project_id required');
+
+            $jobDir = dirname(__DIR__) . '/tmp/proofread-jobs';
+            if (!is_dir($jobDir)) mkdir($jobDir, 0755, true);
+
+            // Create job record in DB
+            $db->prepare(
+                "INSERT INTO sync_jobs (project_id, platform, days, status, started_at)
+                 VALUES (?, 'proofread', 0, 'running', datetime('now'))"
+            )->execute([$projectId]);
+            $jobId = (int) $db->lastInsertId();
+
+            // Launch bin/proofread-copy.php with --project and --strategy args
+            $proj = $db->prepare('SELECT name FROM projects WHERE id = ?');
+            $proj->execute([$projectId]);
+            $projectName = $proj->fetchColumn();
+            if (!$projectName) throw new \RuntimeException("Project #{$projectId} not found");
+
+            $binPath = dirname(__DIR__) . '/bin/proofread-copy.php';
+            $outFile = "{$jobDir}/{$jobId}.log";
+            $pidFile = "{$jobDir}/{$jobId}.pid";
+
+            $cmd = sprintf(
+                'php %s --project %s --strategy %d --market %s --job-id %d > %s 2>&1 & echo $!',
+                escapeshellarg($binPath),
+                escapeshellarg($projectName),
+                $strategyId,
+                escapeshellarg($market),
+                $jobId,
+                escapeshellarg($outFile)
+            );
+
+            $pid = trim(shell_exec($cmd));
+            file_put_contents($pidFile, $pid);
+
+            $result = ['ok' => true, 'job_id' => $jobId, 'async' => true,
+                       'message' => 'Proofreading started. Poll proofread_poll for status.'];
+            break;
+
+        case 'proofread_poll':
+            $jobId = (int) ($_POST['job_id'] ?? 0);
+            if (!$jobId) throw new \RuntimeException('job_id required');
+
+            $jobDir = dirname(__DIR__) . '/tmp/proofread-jobs';
+            $pidFile = "{$jobDir}/{$jobId}.pid";
+            $logFile = "{$jobDir}/{$jobId}.log";
+
+            $job = $db->prepare('SELECT * FROM sync_jobs WHERE id = ?');
+            $job->execute([$jobId]);
+            $jobRow = $job->fetch();
+            if (!$jobRow) throw new \RuntimeException("Job #{$jobId} not found");
+
+            $isRunning = false;
+            if (file_exists($pidFile)) {
+                $pid = trim(file_get_contents($pidFile));
+                $isRunning = $pid && file_exists("/proc/{$pid}");
             }
 
-            // Get project + strategy context
-            $projRow = $db->prepare('SELECT * FROM projects WHERE id = ?');
-            $projRow->execute([$projectId]);
-            $projectData = $projRow->fetch();
-
-            $stratRow = ['target_audience' => '', 'value_proposition' => '', 'tone' => ''];
-            if ($strategyId) {
-                $s = $db->prepare('SELECT * FROM strategies WHERE id = ?');
-                $s->execute([$strategyId]);
-                $stratRow = $s->fetch() ?: $stratRow;
+            if (!$isRunning && $jobRow['status'] === 'running') {
+                // Process finished — mark complete
+                $db->prepare(
+                    "UPDATE sync_jobs SET status = 'complete', completed_at = datetime('now') WHERE id = ?"
+                )->execute([$jobId]);
+                $jobRow['status'] = 'complete';
             }
 
-            // Run proofreader (this calls Claude — takes 30-120s)
-            $proofreader = new \AdManager\Copy\Proofreader();
-            $llmResult = $proofreader->proofread($items, $projectData, $stratRow, $market);
-
-            $approved = 0;
-            $review = 0;
-            $rejected = 0;
-
-            if ($llmResult && !empty($llmResult['items'])) {
-                foreach ($llmResult['items'] as $item) {
-                    $id = (int) $item['id'];
-                    $score = (int) ($item['score'] ?? 0);
-                    $verdict = $item['verdict'] ?? 'warning';
-                    $issues = $item['issues'] ?? [];
-
-                    $copyStore->updateQA($id, $verdict, $issues, $score);
-
-                    if ($score >= 70 && $verdict !== 'fail') {
-                        $copyStore->approve($id);
-                        $approved++;
-                    } elseif ($score >= 50) {
-                        $copyStore->setStatus($id, 'proofread');
-                        $review++;
-                    } else {
-                        $copyStore->reject($id, 'LLM proofreader: score ' . $score);
-                        $rejected++;
-                    }
-                }
+            $tail = '';
+            if (file_exists($logFile)) {
+                $lines = file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                $tail = implode("\n", array_slice($lines ?: [], -20));
             }
 
-            Changelog::log($projectId, 'creative', 'proofread',
-                "LLM proofread: {$approved} approved, {$review} review, {$rejected} rejected (score: " . ($llmResult['overall_score'] ?? '?') . ")",
-                ['approved' => $approved, 'review' => $review, 'rejected' => $rejected, 'overall_score' => $llmResult['overall_score'] ?? null],
-                null, null, 'optimiser');
-
-            $result = ['ok' => true, 'approved' => $approved, 'review' => $review, 'rejected' => $rejected, 'overall_score' => $llmResult['overall_score'] ?? null];
+            $result = [
+                'ok'     => true,
+                'status' => $jobRow['status'],
+                'done'   => $jobRow['status'] === 'complete' || $jobRow['status'] === 'failed',
+                'log'    => $tail,
+            ];
             break;
 
         case 'conversion_plan':
