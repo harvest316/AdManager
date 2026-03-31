@@ -6,5 +6,7 @@ pkgs.mkShell {
   buildInputs = with pkgs; [
     php83
     php83Packages.composer
+    git
+    gh
   ];
 }
