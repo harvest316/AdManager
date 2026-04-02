@@ -101,7 +101,7 @@ class ResponsiveSearchTest extends TestCase
         foreach ($ad->getFinalUrls() as $url) {
             $finalUrls[] = $url;
         }
-        $this->assertSame(['https://auditandfix.com/scan'], $finalUrls);
+        $this->assertSame(['https://example.com/scan'], $finalUrls);
     }
 
     public function testCreateSetsHeadlineTexts(): void
@@ -295,7 +295,7 @@ class ResponsiveSearchTest extends TestCase
     private function baseConfig(): array
     {
         return [
-            'final_url'    => 'https://auditandfix.com/scan',
+            'final_url'    => 'https://example.com/scan',
             'display_path' => ['Free-Audit', 'Scan'],
             'headlines'    => [
                 ['text' => 'Free Website Audit Tool', 'pin' => 1],

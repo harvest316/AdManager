@@ -296,7 +296,7 @@ Answers: "What am I managing?"
 | Projects                                    [+ New Project]|
 +----------------------------------------------------------+
 | Audit & Fix                                              |
-|   auditandfix.com                                        |
+|   example.com                                            |
 |   Google: $6.70/day | Meta: $5.00/day | Total: $11.70/day|
 |   Campaigns: 3 active, 1 paused                         |
 |   Goals: CPA < $30 (Google)                              |

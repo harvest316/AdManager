@@ -305,7 +305,7 @@ function createGoogleAd(array $project, array $strategy, array $approvedAssets, 
     }
 
     // 4. Create ad (RSA for search, or display ad for display)
-    $finalUrl = $project['website_url'] ?? 'https://auditandfix.com';
+    $finalUrl = $project['website_url'] ?? (getenv('BRAND_URL') ?: 'https://example.com');
 
     if ($campaignType === 'search') {
         // Load approved copy from ad_copy table (populated by bin/proofread-copy.php)
@@ -464,7 +464,7 @@ function createMetaAd(array $project, array $strategy, array $approvedAssets, fl
     }
 
     // 4. Create ad creative
-    $finalUrl = $project['website_url'] ?? 'https://auditandfix.com';
+    $finalUrl = $project['website_url'] ?? (getenv('BRAND_URL') ?: 'https://example.com');
     $message  = $strategy['value_proposition'] ?? "Check out {$project['display_name']}";
 
     $pageId = getenv('META_PAGE_ID') ?: '';

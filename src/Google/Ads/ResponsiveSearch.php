@@ -27,7 +27,7 @@ class ResponsiveSearch
      *
      * @param string $adGroupId
      * @param array  $config [
-     *   'final_url'    => 'https://auditandfix.com/scan',
+     *   'final_url'    => 'https://example.com/scan',
      *   'display_path' => ['Free-Audit', ''],  // up to 2 path segments
      *   'headlines'    => [
      *     ['text' => 'Free Website Audit Tool', 'pin' => 1],  // pin is optional (1 or 2)

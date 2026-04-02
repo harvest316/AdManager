@@ -159,7 +159,7 @@ class ImageGen
             CURLOPT_HTTPHEADER     => [
                 'Content-Type: application/json',
                 'Authorization: Bearer ' . $this->apiKey,
-                'HTTP-Referer: https://auditandfix.com',
+                'HTTP-Referer: ' . (getenv('BRAND_URL') ?: 'https://example.com'),
                 'X-Title: AdManager',
             ],
             CURLOPT_TIMEOUT => 120,

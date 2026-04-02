@@ -49,9 +49,9 @@ class Ad
      *           'page_id'   => '123456789',
      *           'link_data' => [
      *               'message'        => 'Get your free website audit!',
-     *               'link'           => 'https://auditandfix.com',
+     *               'link'           => 'https://example.com',
      *               'image_hash'     => 'abc123...',
-     *               'call_to_action' => ['type' => 'LEARN_MORE', 'value' => ['link' => 'https://auditandfix.com']],
+     *               'call_to_action' => ['type' => 'LEARN_MORE', 'value' => ['link' => 'https://example.com']],
      *           ],
      *       ],
      *   ];
@@ -65,7 +65,7 @@ class Ad
      *               'video_id'       => '987654321',
      *               'message'        => 'Watch how we improved this site...',
      *               'title'          => 'Free Website Audit',
-     *               'call_to_action' => ['type' => 'LEARN_MORE', 'value' => ['link' => 'https://auditandfix.com']],
+     *               'call_to_action' => ['type' => 'LEARN_MORE', 'value' => ['link' => 'https://example.com']],
      *           ],
      *       ],
      *   ];

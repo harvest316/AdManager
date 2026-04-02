@@ -63,7 +63,7 @@ class SitelinkTest extends TestCase
         $this->injectMockClient($assetServiceMock, $campaignAssetMock);
 
         $assets = new Assets();
-        $assets->addSitelink(self::FAKE_CAMPAIGN_ID, 'Free Audit', 'https://auditandfix.com/scan');
+        $assets->addSitelink(self::FAKE_CAMPAIGN_ID, 'Free Audit', 'https://example.com/scan');
 
         // The sitelink_asset sub-message holds the link_text
         $sitelink = $capture->asset->getSitelinkAsset();
@@ -79,9 +79,9 @@ class SitelinkTest extends TestCase
         $this->injectMockClient($assetServiceMock, $campaignAssetMock);
 
         $assets = new Assets();
-        $assets->addSitelink(self::FAKE_CAMPAIGN_ID, 'Free Audit', 'https://auditandfix.com/scan');
+        $assets->addSitelink(self::FAKE_CAMPAIGN_ID, 'Free Audit', 'https://example.com/scan');
 
-        $this->assertSame('https://auditandfix.com/scan', $capture->asset->getFinalUrls()[0]);
+        $this->assertSame('https://example.com/scan', $capture->asset->getFinalUrls()[0]);
     }
 
     public function testAddSitelinkSetsDesc1AndDesc2WhenProvided(): void
@@ -94,7 +94,7 @@ class SitelinkTest extends TestCase
         $assets->addSitelink(
             self::FAKE_CAMPAIGN_ID,
             'Free Audit',
-            'https://auditandfix.com/scan',
+            'https://example.com/scan',
             'Check your score',
             'Takes 30 seconds'
         );
@@ -114,7 +114,7 @@ class SitelinkTest extends TestCase
         $assets->addSitelink(
             self::FAKE_CAMPAIGN_ID,
             'Free Audit',
-            'https://auditandfix.com/scan',
+            'https://example.com/scan',
             '',   // empty desc1
             ''    // empty desc2
         );
@@ -135,7 +135,7 @@ class SitelinkTest extends TestCase
         $assets->addSitelink(
             self::FAKE_CAMPAIGN_ID,
             'Pricing',
-            'https://auditandfix.com/pricing',
+            'https://example.com/pricing',
             'See our rates',
             ''  // empty desc2
         );
@@ -152,7 +152,7 @@ class SitelinkTest extends TestCase
         $this->injectMockClient($assetServiceMock, $campaignAssetMock);
 
         $assets = new Assets();
-        $result = $assets->addSitelink(self::FAKE_CAMPAIGN_ID, 'Home', 'https://auditandfix.com');
+        $result = $assets->addSitelink(self::FAKE_CAMPAIGN_ID, 'Home', 'https://example.com');
 
         $this->assertSame(self::FAKE_ASSET_RN, $result);
     }
@@ -164,7 +164,7 @@ class SitelinkTest extends TestCase
         $this->injectMockClient($assetServiceMock, $campaignAssetMock);
 
         $assets = new Assets();
-        $assets->addSitelink(self::FAKE_CAMPAIGN_ID, 'Home', 'https://auditandfix.com');
+        $assets->addSitelink(self::FAKE_CAMPAIGN_ID, 'Home', 'https://example.com');
         // Expectation asserted automatically by PHPUnit mock teardown
     }
 

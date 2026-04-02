@@ -172,7 +172,7 @@ class AdTest extends TestCase
 
         $spec = [
             'page_id'   => '123456789',
-            'link_data' => ['message' => 'Get your free audit!', 'link' => 'https://auditandfix.com'],
+            'link_data' => ['message' => 'Get your free audit!', 'link' => 'https://example.com'],
         ];
 
         $ad = new Ad();
@@ -264,8 +264,8 @@ class AdTest extends TestCase
                 'link_data' => [
                     'message'           => 'See our success stories',
                     'child_attachments' => [
-                        ['link' => 'https://auditandfix.com/1', 'image_hash' => 'abc', 'name' => 'Card 1'],
-                        ['link' => 'https://auditandfix.com/2', 'image_hash' => 'def', 'name' => 'Card 2'],
+                        ['link' => 'https://example.com/1', 'image_hash' => 'abc', 'name' => 'Card 1'],
+                        ['link' => 'https://example.com/2', 'image_hash' => 'def', 'name' => 'Card 2'],
                     ],
                 ],
             ],
@@ -503,7 +503,7 @@ class AdTest extends TestCase
                 'page_id'   => '123456789',
                 'link_data' => [
                     'message'    => 'Get your free website audit!',
-                    'link'       => 'https://auditandfix.com',
+                    'link'       => 'https://example.com',
                     'image_hash' => 'abc123hash',
                 ],
             ],

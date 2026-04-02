@@ -14,7 +14,7 @@ Architecture design for evolving the review page into a full ad management dashb
 | B: Separate dashboard app | Clean separation | Duplication, two codebases to maintain, overkill for 1-2 users |
 | **C: Clean API layer in AdManager, deploy subset later** | Single codebase, works locally today, Hostinger-deployable later | Requires discipline to keep API separate from direct DB calls |
 
-**Rationale:** The review page already runs on PHP's built-in server. The API layer we build now uses the same DB class and Composer autoloader. When we eventually deploy to Hostinger, we FTP the `review/` directory plus a `vendor/` subset -- identical to how `auditandfix.com` deploys today via `scripts/deploy-website.sh`. No architectural gymnastics needed.
+**Rationale:** The review page already runs on PHP's built-in server. The API layer we build now uses the same DB class and Composer autoloader. When we eventually deploy to Hostinger, we FTP the `review/` directory plus a `vendor/` subset -- identical to how the main site deploys today via `scripts/deploy-website.sh`. No architectural gymnastics needed.
 
 **What changes for Hostinger deployment:**
 - `DB.php` already supports `ADMANAGER_DB_PATH` env var -- Hostinger would point to a synced or uploaded SQLite file
@@ -692,7 +692,7 @@ The overview is the new default landing page. It shows decision-ready informatio
 ### What becomes easier
 
 1. **Adding new views** -- drop a PHP file in `views/`, add it to the `$allowedViews` array. Done.
-2. **Deploying to Hostinger** -- FTP the `review/` directory. Same pattern as `auditandfix.com`.
+2. **Deploying to Hostinger** -- FTP the `review/` directory. Same pattern as the main site.
 3. **Understanding system history** -- the changelog captures every automated and manual decision with full context.
 4. **Performance analysis** -- metrics are always computed the same way (via `Metrics::compute()`), no ad-hoc division-by-million scattered across views.
 5. **Multi-project management** -- project selector in the header, all views are project-scoped.

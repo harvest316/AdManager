@@ -6,10 +6,10 @@ Multi-project ad platform managing Google Ads + Meta (Facebook/Instagram) campai
 
 ```bash
 php bin/db-init.php                                    # Create SQLite DB
-php bin/project.php create "auditandfix" --url "https://auditandfix.com" --display "Audit & Fix"
-php bin/project.php budget auditandfix google 6.70     # $6.70/day Google
-php bin/project.php budget auditandfix meta 5.00       # $5.00/day Meta
-php bin/project.php goals auditandfix --cpa 30 --platform google
+php bin/project.php create "myproject" --url "https://example.com" --display "My Project"
+php bin/project.php budget myproject google 6.70       # $6.70/day Google
+php bin/project.php budget myproject meta 5.00         # $5.00/day Meta
+php bin/project.php goals myproject --cpa 30 --platform google
 ```
 
 ## Architecture
