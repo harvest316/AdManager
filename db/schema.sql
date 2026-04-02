@@ -324,3 +324,42 @@ CREATE TABLE IF NOT EXISTS conversion_actions (
 CREATE INDEX IF NOT EXISTS idx_conv_actions_project ON conversion_actions(project_id);
 CREATE INDEX IF NOT EXISTS idx_conv_actions_platform ON conversion_actions(platform);
 CREATE INDEX IF NOT EXISTS idx_conv_actions_status ON conversion_actions(status);
+
+-- Cron jobs (mmo cron dispatcher)
+
+CREATE TABLE IF NOT EXISTS cron_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  task_key TEXT NOT NULL UNIQUE,
+  description TEXT,
+  handler_type TEXT NOT NULL CHECK(handler_type IN ('function', 'command')),
+  handler_value TEXT NOT NULL,
+  interval_value INTEGER NOT NULL,
+  interval_unit TEXT NOT NULL CHECK(interval_unit IN ('minutes', 'hours', 'days', 'weeks')),
+  enabled BOOLEAN DEFAULT 1,
+  last_run_at DATETIME,
+  timeout_seconds INTEGER DEFAULT NULL,
+  critical BOOLEAN DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_cron_jobs_task_key ON cron_jobs(task_key);
+CREATE INDEX IF NOT EXISTS idx_cron_jobs_enabled ON cron_jobs(enabled);
+
+-- Cron job logs
+
+CREATE TABLE IF NOT EXISTS cron_job_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES cron_jobs(id),
+  task_key TEXT NOT NULL,
+  started_at DATETIME NOT NULL,
+  finished_at DATETIME,
+  status TEXT CHECK(status IN ('running', 'success', 'error', 'timeout')),
+  output TEXT,
+  error TEXT,
+  duration_ms INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_cron_logs_job ON cron_job_logs(job_id);
+CREATE INDEX IF NOT EXISTS idx_cron_logs_started ON cron_job_logs(started_at);

@@ -10,6 +10,7 @@
  *   php bin/optimise.php keywords --project <name>
  *   php bin/optimise.php budget --project <name>
  *   php bin/optimise.php fatigue --project <name> [--days 30]
+ *   php bin/optimise.php copy-refresh --project <name> [--campaign <name>]
  *   php bin/optimise.php full --project <name>   (runs everything)
  */
 
@@ -21,6 +22,7 @@ use AdManager\Optimise\SplitTest;
 use AdManager\Optimise\KeywordMiner;
 use AdManager\Optimise\BudgetAllocator;
 use AdManager\Optimise\CreativeFatigue;
+use AdManager\Optimise\CopyRefresher;
 
 // ── Arg parsing ──────────────────────────────────────────────────────────────
 
@@ -64,6 +66,7 @@ Usage:
   {$script} keywords --project <name>
   {$script} budget --project <name>
   {$script} fatigue --project <name> [--days 30]
+  {$script} copy-refresh --project <name> [--campaign <name>]
   {$script} full --project <name> [--days 7]   (runs everything)
 
 USAGE;
@@ -326,6 +329,60 @@ function cmdFatigue(array $named): void
     echo "Total fatigued ads: " . count($results) . "\n";
 }
 
+function cmdCopyRefresh(array $named): void
+{
+    $projectName = $named['project'] ?? null;
+    if (!$projectName) {
+        echo "Error: --project is required.\n";
+        usage();
+    }
+
+    $project = resolveProject($projectName);
+    $refresher = new CopyRefresher();
+
+    $options = [
+        'market' => $named['market'] ?? 'all',
+    ];
+    if (isset($named['max'])) $options['max_replacements'] = (int) $named['max'];
+    if (isset($named['strategy'])) $options['strategy_id'] = (int) $named['strategy'];
+
+    if (isset($named['campaign'])) {
+        echo "Refreshing copy for campaign: {$named['campaign']}\n";
+        $result = $refresher->refresh($project['id'], $named['campaign'], $options);
+        printCopyRefreshResult($named['campaign'], $result);
+    } else {
+        echo "Refreshing copy for all campaigns...\n\n";
+        $results = $refresher->refreshAll($project['id'], $options);
+
+        if (empty($results)) {
+            echo "No campaigns with approved copy found.\n";
+            return;
+        }
+
+        $totalWeak = 0;
+        $totalGenerated = 0;
+        $totalApproved = 0;
+
+        foreach ($results as $campaignName => $result) {
+            printCopyRefreshResult($campaignName, $result);
+            $totalWeak += $result['weak_found'];
+            $totalGenerated += $result['generated'];
+            $totalApproved += $result['approved'];
+        }
+
+        echo "\n  Total: {$totalWeak} weak → {$totalGenerated} generated → {$totalApproved} approved\n";
+    }
+}
+
+function printCopyRefreshResult(string $campaignName, array $r): void
+{
+    if ($r['weak_found'] === 0) {
+        echo "  {$campaignName}: no weak headlines found\n";
+    } else {
+        echo "  {$campaignName}: {$r['weak_found']} weak → {$r['generated']} generated → {$r['approved']} approved, {$r['review']} review\n";
+    }
+}
+
 function cmdFull(array $named): void
 {
     $projectName = $named['project'] ?? null;
@@ -411,6 +468,10 @@ function cmdFull(array $named): void
     $named['days'] = $fatigueDays;
     cmdFatigue($named);
 
+    // 6. Copy refresh (replace weak headlines)
+    echo "\n--- Copy Refresh ---\n\n";
+    cmdCopyRefresh($named);
+
     echo "\n=================================================================\n";
     echo "  Report complete. Run 'php bin/optimise.php report' for AI analysis.\n";
     echo "=================================================================\n";
@@ -429,11 +490,12 @@ if (empty($positional)) {
 $command = array_shift($positional);
 
 match ($command) {
-    'report'      => cmdReport($named),
-    'split-tests' => cmdSplitTests($named),
-    'keywords'    => cmdKeywords($named),
-    'budget'      => cmdBudget($named),
-    'fatigue'     => cmdFatigue($named),
-    'full'        => cmdFull($named),
-    default       => usage(),
+    'report'       => cmdReport($named),
+    'split-tests'  => cmdSplitTests($named),
+    'keywords'     => cmdKeywords($named),
+    'budget'       => cmdBudget($named),
+    'fatigue'      => cmdFatigue($named),
+    'copy-refresh' => cmdCopyRefresh($named),
+    'full'         => cmdFull($named),
+    default        => usage(),
 };
