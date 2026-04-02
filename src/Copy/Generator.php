@@ -77,6 +77,11 @@ class Generator
         $market = $options['market'] ?? 'all';
         $localeInstruction = Locale::promptInstruction($market);
 
+        $winningSection = '';
+        if (!empty($options['winning_patterns'])) {
+            $winningSection = "\n## Winning patterns from past split tests:\n{$options['winning_patterns']}\n";
+        }
+
         $prompt = <<<PROMPT
 You are an expert advertising copywriter. Generate {$count} replacement Google Ads RSA headlines.
 
@@ -90,7 +95,7 @@ You are an expert advertising copywriter. Generate {$count} replacement Google A
 
 ## Top-performing headlines (match this tone and approach):
 {$strongList}
-
+{$winningSection}
 ## Rules
 - Each headline: max 30 characters (including spaces)
 - Each must stand alone (RSA combines randomly)

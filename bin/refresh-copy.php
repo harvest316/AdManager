@@ -57,15 +57,6 @@ USAGE;
 DB::init();
 $db = DB::get();
 
-$stmt = $db->prepare('SELECT * FROM projects WHERE name = ?');
-$stmt->execute([$args['project']]);
-$project = $stmt->fetch();
-if (!$project) {
-    echo "Error: project '{$args['project']}' not found.\n";
-    exit(1);
-}
-
-$projectId = (int) $project['id'];
 $refresher = new CopyRefresher();
 
 $options = [
@@ -74,35 +65,64 @@ $options = [
 if (isset($args['max'])) $options['max_replacements'] = (int) $args['max'];
 if (isset($args['strategy'])) $options['strategy_id'] = (int) $args['strategy'];
 
-echo "Project: " . ($project['display_name'] ?? $project['name']) . "\n\n";
-
-if (isset($args['campaign'])) {
-    $campaignName = $args['campaign'];
-    echo "Refreshing campaign: {$campaignName}\n";
-    $result = $refresher->refresh($projectId, $campaignName, $options);
-    printResult($campaignName, $result);
-} else {
-    echo "Refreshing all campaigns...\n\n";
-    $results = $refresher->refreshAll($projectId, $options);
-
-    if (empty($results)) {
-        echo "No campaigns with approved copy found.\n";
+// Resolve project(s)
+$projectArg = $args['project'];
+if ($projectArg === 'all') {
+    $projects = $db->query('SELECT * FROM projects ORDER BY id')->fetchAll();
+    if (empty($projects)) {
+        echo "No projects found.\n";
         exit(0);
     }
+} else {
+    $stmt = $db->prepare('SELECT * FROM projects WHERE name = ?');
+    $stmt->execute([$projectArg]);
+    $project = $stmt->fetch();
+    if (!$project) {
+        echo "Error: project '{$projectArg}' not found.\n";
+        exit(1);
+    }
+    $projects = [$project];
+}
 
-    $totalWeak = 0;
-    $totalGenerated = 0;
-    $totalApproved = 0;
+$grandTotalWeak = 0;
+$grandTotalGenerated = 0;
+$grandTotalApproved = 0;
 
-    foreach ($results as $campaignName => $result) {
+foreach ($projects as $project) {
+    $projectId = (int) $project['id'];
+    $projectLabel = $project['display_name'] ?? $project['name'];
+
+    echo "Project: {$projectLabel}\n";
+
+    if (isset($args['campaign'])) {
+        $campaignName = $args['campaign'];
+        echo "  Refreshing campaign: {$campaignName}\n";
+        $result = $refresher->refresh($projectId, $campaignName, $options);
         printResult($campaignName, $result);
-        $totalWeak += $result['weak_found'];
-        $totalGenerated += $result['generated'];
-        $totalApproved += $result['approved'];
+        $grandTotalWeak += $result['weak_found'];
+        $grandTotalGenerated += $result['generated'];
+        $grandTotalApproved += $result['approved'];
+    } else {
+        $results = $refresher->refreshAll($projectId, $options);
+
+        if (empty($results)) {
+            echo "  No campaigns with approved copy found.\n";
+        } else {
+            foreach ($results as $campaignName => $result) {
+                printResult($campaignName, $result);
+                $grandTotalWeak += $result['weak_found'];
+                $grandTotalGenerated += $result['generated'];
+                $grandTotalApproved += $result['approved'];
+            }
+        }
     }
 
-    echo "=== Total ===\n";
-    echo "  Weak found: {$totalWeak}  Generated: {$totalGenerated}  Auto-approved: {$totalApproved}\n";
+    echo "\n";
+}
+
+if (count($projects) > 1 || $projectArg === 'all') {
+    echo "=== Grand Total ===\n";
+    echo "  Weak found: {$grandTotalWeak}  Generated: {$grandTotalGenerated}  Auto-approved: {$grandTotalApproved}\n";
 }
 
 function printResult(string $campaignName, array $r): void

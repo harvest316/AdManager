@@ -98,6 +98,12 @@ class CopyRefresher
         $maxReplacements = $options['max_replacements'] ?? count($weak);
         $weak = array_slice($weak, 0, $maxReplacements);
 
+        // Enrich options with winning patterns from concluded split tests
+        $winningPatterns = $this->getWinningPatterns($projectId, $campaignName);
+        if (!empty($winningPatterns)) {
+            $options['winning_patterns'] = $winningPatterns;
+        }
+
         // Step 2: Generate replacements
         $replacements = $this->generator->generateReplacements(
             $project, $weak, $strong, $campaignName, $options
@@ -200,6 +206,66 @@ class CopyRefresher
         );
 
         return $result;
+    }
+
+    /**
+     * Extract winning patterns from concluded split tests for this campaign.
+     *
+     * Looks at winning ads from recent split tests and extracts their headlines
+     * to feed as style guidance into the replacement generator prompt.
+     *
+     * @return string|null Human-readable pattern summary, or null if no data
+     */
+    private function getWinningPatterns(int $projectId, string $campaignName): ?string
+    {
+        $db = DB::get();
+
+        // Find concluded split tests for campaigns matching this name
+        $stmt = $db->prepare(
+            "SELECT st.winner_ad_id, st.metric, st.confidence_level
+             FROM split_tests st
+             JOIN campaigns c ON c.id = st.campaign_id
+             WHERE st.project_id = ? AND c.name = ? AND st.status = 'concluded'
+               AND st.winner_ad_id IS NOT NULL
+             ORDER BY st.concluded_at DESC
+             LIMIT 5"
+        );
+        $stmt->execute([$projectId, $campaignName]);
+        $winners = $stmt->fetchAll();
+
+        if (empty($winners)) {
+            return null;
+        }
+
+        // Get the winning ads' headlines from ad_copy
+        $patterns = [];
+        foreach ($winners as $w) {
+            $adStmt = $db->prepare(
+                "SELECT ac.content, ac.copy_type, ac.qa_score
+                 FROM ad_copy ac
+                 JOIN ads a ON a.ad_group_id = (SELECT ad_group_id FROM ads WHERE id = ?)
+                 WHERE ac.project_id = ? AND ac.campaign_name = ?
+                   AND ac.copy_type = 'headline' AND ac.status = 'approved'
+                   AND ac.qa_score >= 70
+                 ORDER BY ac.qa_score DESC
+                 LIMIT 5"
+            );
+            $adStmt->execute([$w['winner_ad_id'], $projectId, $campaignName]);
+            $topHeadlines = $adStmt->fetchAll();
+
+            foreach ($topHeadlines as $h) {
+                $patterns[] = $h['content'];
+            }
+        }
+
+        if (empty($patterns)) {
+            return null;
+        }
+
+        $unique = array_unique($patterns);
+        $list = implode("\n", array_map(fn($p) => "- \"{$p}\"", array_slice($unique, 0, 10)));
+
+        return "Past split test winners for this campaign use headlines like:\n{$list}\nUse a similar tone, structure, and approach.";
     }
 
     /**

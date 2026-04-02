@@ -176,20 +176,60 @@ if (!empty($changes)) {
             }
 
             $flagged = 0;
+            $proofreader = new Proofreader();
+
             foreach ($byProject as $projectId => $projectItems) {
                 $db = DB::get();
-                $stmt = $db->prepare('SELECT display_name, name FROM projects WHERE id = ?');
+                $stmt = $db->prepare('SELECT * FROM projects WHERE id = ?');
                 $stmt->execute([$projectId]);
                 $proj = $stmt->fetch();
                 $brandName = $proj['display_name'] ?? $proj['name'] ?? '';
 
+                // Pass 1: programmatic checks
                 $results = $checker->checkAll($projectItems, $brandName);
 
+                $progFailed = [];
+                $passedItems = [];
                 foreach ($results as $id => $result) {
                     $status = ProgrammaticCheck::overallStatus($result['issues']);
                     if ($status === 'fail') {
                         $store->flag($id, json_encode($result['issues']));
                         $flagged++;
+                        $progFailed[] = $id;
+                    } else {
+                        // Collect for LLM pass
+                        foreach ($projectItems as $item) {
+                            if ((int) $item['id'] === $id) {
+                                $passedItems[] = $item;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Pass 2: LLM proofreading on items that passed programmatic
+                if (!empty($passedItems)) {
+                    echo "  Running LLM re-proofread on " . count($passedItems) . " items for project {$brandName}...\n";
+
+                    $strategy = ['target_audience' => '', 'value_proposition' => ''];
+                    $llmResult = $proofreader->proofread($passedItems, $proj, $strategy, 'all');
+
+                    if ($llmResult !== null) {
+                        foreach ($llmResult['items'] as $ir) {
+                            $id = $ir['id'];
+                            $allIssues = array_merge($results[$id]['issues'] ?? [], $ir['issues'] ?? []);
+                            $score = $ir['score'] ?? 0;
+                            $hasFails = !empty(array_filter($allIssues, fn($i) => ($i['severity'] ?? '') === 'fail'));
+
+                            $store->updateQA($id, $ir['verdict'], $allIssues, $score);
+
+                            if ($score < 70 || $hasFails) {
+                                $store->flag($id, json_encode($allIssues));
+                                $flagged++;
+                            }
+                        }
+                    } else {
+                        echo "  LLM proofreading failed — programmatic results only.\n";
                     }
                 }
             }
