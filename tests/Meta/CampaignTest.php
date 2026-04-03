@@ -67,9 +67,9 @@ class CampaignTest extends TestCase
         $this->injectMockClient($this->buildCapturingClientMock($capture));
 
         $campaign = new Campaign();
-        $campaign->create(['name' => 'Audit&Fix — FB — AU'] + $this->baseCreateConfig());
+        $campaign->create(['name' => 'TestBrand — FB — AU'] + $this->baseCreateConfig());
 
-        $this->assertSame('Audit&Fix — FB — AU', $capture->data['name']);
+        $this->assertSame('TestBrand — FB — AU', $capture->data['name']);
     }
 
     public function testCreateIncludesObjectiveInPayload(): void

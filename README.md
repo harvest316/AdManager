@@ -1,6 +1,6 @@
 # AdManager
 
-Google Ads API management tool for Audit&Fix. Handles all campaign types, keywords, negative keywords, RSAs, and reporting.
+Multi-project ad platform for Google Ads and Meta campaigns. Handles all campaign types, keywords, negative keywords, RSAs, and reporting.
 
 ## Setup
 

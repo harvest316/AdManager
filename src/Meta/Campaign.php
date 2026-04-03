@@ -24,7 +24,7 @@ class Campaign
      * Create a new campaign.
      *
      * @param array $config [
-     *   'name'                 => 'Audit&Fix — FB — AU',
+     *   'name'                 => 'MyBrand — FB — AU',
      *   'objective'            => 'OUTCOME_SALES',
      *   'status'               => 'PAUSED',           // default PAUSED
      *   'special_ad_categories' => [],                 // e.g. ['HOUSING']

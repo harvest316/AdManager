@@ -28,7 +28,7 @@ class DemandGen
      * Create a Demand Gen campaign (YouTube, Gmail, Discover).
      *
      * @param array $config [
-     *   'name'             => 'Audit&Fix — DemandGen — AU',
+     *   'name'             => 'MyBrand — DemandGen — AU',
      *   'daily_budget_usd' => 5.00,
      *   'bidding'          => 'maximize_conversions' | 'maximize_conversion_value',
      *   'target_roas'      => 3.0,

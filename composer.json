@@ -1,6 +1,6 @@
 {
-    "name": "auditandfix/admanager",
-    "description": "Google Ads API management tool for Audit&Fix",
+    "name": "mmo-platform/admanager",
+    "description": "Multi-project ad platform for Google Ads and Meta campaigns",
     "type": "project",
     "require": {
         "php": ">=8.1",

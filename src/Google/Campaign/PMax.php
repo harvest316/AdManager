@@ -28,7 +28,7 @@ class PMax
      * Create a Performance Max campaign.
      *
      * @param array $config [
-     *   'name'             => 'Audit&Fix — PMax — AU',
+     *   'name'             => 'MyBrand — PMax — AU',
      *   'daily_budget_usd' => 10.00,
      *   'bidding'          => 'maximize_conversions' | 'maximize_conversion_value',
      *   'target_roas'      => 3.0,  // optional, for maximize_conversion_value

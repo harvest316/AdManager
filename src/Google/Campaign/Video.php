@@ -29,7 +29,7 @@ class Video
      * Create a Video (YouTube) campaign.
      *
      * @param array $config [
-     *   'name'             => 'Audit&Fix — Video — AU',
+     *   'name'             => 'MyBrand — Video — AU',
      *   'daily_budget_usd' => 5.00,
      *   'subtype'          => 'video_action' | 'video_reach',
      *   'bidding'          => 'maximize_conversions' | 'target_cpa',

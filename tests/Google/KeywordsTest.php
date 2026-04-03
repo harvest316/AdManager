@@ -104,8 +104,8 @@ class KeywordsTest extends TestCase
         Level,Campaign,Keyword,Match Type
         Account,,free,Broad
         Account,,template,Broad
-        Campaign,Non-Brand -- Website Audit,audit and fix,Phrase
-        Campaign,Non-Brand -- Website Problems,auditandfix,Broad
+        Campaign,Non-Brand -- Website Audit,example brand,Phrase
+        Campaign,Non-Brand -- Website Problems,examplebrand,Broad
         CSV;
 
         $rows = Keywords::loadNegativesCsv($this->writeTempCsv($csv));

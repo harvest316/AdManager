@@ -1,7 +1,7 @@
 {
   "name": "admanager",
   "version": "1.0.0",
-  "description": "Google Ads API management tool for Audit&Fix. Handles all campaign types, keywords, negative keywords, RSAs, and reporting.",
+  "description": "Multi-project ad platform for Google Ads and Meta campaigns. Handles all campaign types, keywords, negative keywords, RSAs, and reporting.",
   "main": "index.js",
   "directories": {
     "doc": "docs",

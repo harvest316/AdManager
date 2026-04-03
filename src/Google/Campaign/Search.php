@@ -33,7 +33,7 @@ class Search
      * Create a Search campaign.
      *
      * @param array $config [
-     *   'name'              => 'Audit&Fix — Search — AU',
+     *   'name'              => 'MyBrand — Search — AU',
      *   'daily_budget_usd'  => 6.70,
      *   'bidding'           => 'maximize_conversions' | 'manual_cpc' | 'target_cpa',
      *   'target_cpa_usd'    => 150.00,       // only for target_cpa

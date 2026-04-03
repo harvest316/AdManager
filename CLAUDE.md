@@ -39,7 +39,7 @@ prompts/            — Prompt templates for Claude CLI
 ## Key Principles
 
 - **Never auto-enable** — all campaigns start PAUSED, human reviews before enabling
-- **Multi-project** — manages multiple products (Audit&Fix, 2Step, etc.)
+- **Multi-project** — manages multiple products (each configured via projects table)
 - **Budget per project+platform** — daily budget set at project+platform level
 - **Claude CLI for LLM** — uses `claude -p "..."` not OpenRouter for text generation
 - **Split tests** — A/B testing with statistical significance (z-test)

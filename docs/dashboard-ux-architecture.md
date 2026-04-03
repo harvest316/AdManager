@@ -87,7 +87,7 @@ This is the default landing page. It answers: "Are my ads working? What should I
 
 ```
 +----------------------------------------------------------+
-| Project: Audit & Fix                    Last 7d | 14d | 30d |
+| Project: Example Brand                    Last 7d | 14d | 30d |
 +----------------------------------------------------------+
 |                                                          |
 | [ $47.20 ]  [ 12 ]     [ $3.93 ]  [ 3.2x ]  [ 2.1% ]  |
@@ -295,7 +295,7 @@ Answers: "What am I managing?"
 +----------------------------------------------------------+
 | Projects                                    [+ New Project]|
 +----------------------------------------------------------+
-| Audit & Fix                                              |
+| Example Brand                                              |
 |   example.com                                            |
 |   Google: $6.70/day | Meta: $5.00/day | Total: $11.70/day|
 |   Campaigns: 3 active, 1 paused                         |

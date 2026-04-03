@@ -28,7 +28,7 @@ class Display
      * Create a Display campaign.
      *
      * @param array $config [
-     *   'name'             => 'Audit&Fix — Display — Remarketing',
+     *   'name'             => 'MyBrand — Display — Remarketing',
      *   'daily_budget_usd' => 5.00,
      *   'bidding'          => 'maximize_conversions' | 'target_cpa',
      *   'target_cpa_usd'   => 150.00,
