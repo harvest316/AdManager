@@ -53,6 +53,41 @@ See `distributed-infra/modules/admanager.nix`.
 
 ---
 
+## TrustPilot + Google Business Profile Ratings in Ad Campaigns
+
+**Status:** Future — research needed
+
+Consider integrating TrustPilot ratings and Google Business Profile (GBP) reviews into ad campaigns:
+- **Google Ads:** Seller ratings extension (requires TrustPilot or Google Customer Reviews integration with 100+ reviews). Auto-shows star ratings below RSA ads.
+- **Meta Ads:** Social proof in ad copy — pull review count + average rating via TrustPilot API, inject into primary text ("Rated 4.8/5 by 200+ businesses").
+- **RSA headlines:** Dynamic headline using review stats ("Trusted by 200+ Businesses" with actual count from API).
+- **GBP API:** Pull Google review count + rating for client businesses (2Step prospects). Use in ad copy targeting.
+
+**APIs:**
+- TrustPilot Business API: https://developers.trustpilot.com/
+- Google My Business API (deprecated → Google Business Profile API): review retrieval
+
+**Implementation:**
+- `src/Social/TrustPilot.php` — fetch review summary (count, avg rating)
+- `src/Social/GoogleBusinessProfile.php` — fetch GBP reviews
+- Wire into strategy generator: "include social proof stats in ad copy"
+- Wire into ad copy templates: `{{REVIEW_COUNT}}`, `{{AVG_RATING}}` placeholders
+
+---
+
+## Mantis Ad Network (Cannabis-Specific Programmatic)
+
+**Status:** Future — only if cannabis advertising exceeds $250/month
+
+Mantis is the largest cannabis-specific programmatic ad network (50K+ sites/apps). Uses OpenRTB exchange protocol (not REST API). $500 deposit + 100% service fee effectively doubles cost.
+
+At $200-600/month budget, Mantis is impractical — ExoClick's contextual targeting with cannabis keywords in legal geos is more cost-effective. Revisit if cannabis becomes a primary vertical with dedicated budget.
+
+- Mantis: https://www.mantisadnetwork.com/
+- OpenRTB docs: https://github.com/mantisadnetwork
+
+---
+
 ## Browser Pixel fbp/fbc in CAPI Dedup
 
 The `_fbp` and `_fbc` cookies are read server-side in `api.php` and passed to CAPI.
