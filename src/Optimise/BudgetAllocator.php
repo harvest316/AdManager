@@ -211,6 +211,37 @@ class BudgetAllocator
                         \AdManager\Meta\Client::get()->post($externalId, [
                             'daily_budget' => (int) round($recommendedAud * 100),
                         ]);
+                    } elseif ($platform === 'tiktok') {
+                        // TikTok budget in cents
+                        \AdManager\Http\Client::post('/campaign/update/', [
+                            'campaign_id'  => $externalId,
+                            'daily_budget' => (int) round($recommendedAud * 100),
+                        ]);
+                    } elseif ($platform === 'x') {
+                        // X (Twitter) budget in local micro units
+                        \AdManager\Http\Client::put("/campaigns/{$externalId}", [
+                            'daily_budget_amount_local_micro' => (int) round($recommendedAud * 1_000_000),
+                        ]);
+                    } elseif ($platform === 'linkedin') {
+                        // LinkedIn uses amount + currencyCode object
+                        \AdManager\Http\Client::post("/adCampaigns/{$externalId}", [
+                            'dailyBudget' => [
+                                'amount'       => (string) round($recommendedAud, 2),
+                                'currencyCode' => 'AUD',
+                            ],
+                        ]);
+                    } elseif ($platform === 'exoclick') {
+                        // ExoClick budget in cents
+                        \AdManager\Http\Client::put("/campaigns/{$externalId}", [
+                            'daily_budget' => (int) round($recommendedAud * 100),
+                        ]);
+                    } elseif ($platform === 'adsterra') {
+                        // Adsterra budget in cents
+                        \AdManager\Http\Client::patch("/advertising/campaigns/{$externalId}", [
+                            'daily_budget' => (int) round($recommendedAud * 100),
+                        ]);
+                    } elseif ($platform === 'banner') {
+                        // DB-only — no API call needed
                     }
                 } catch (\Throwable $e) {
                     $errors[] = "Failed to update campaign {$campaignId} (external: {$externalId}) on {$platform}: {$e->getMessage()}";

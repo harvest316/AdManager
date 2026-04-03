@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use AdManager\DB;
+use AdManager\Optimise\GlobalBudget;
 
 // ── Arg parsing ──────────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ AdManager project CLI
 Usage:
   {$script} create <name> --url <url> --display "<Display Name>" [--description "..."]
   {$script} budget <name> <platform> <daily_aud>
+  {$script} global-budget <name> <daily> [--min N] [--max N] [--variance N] [--scaling on|off]
   {$script} goals <name> --<metric> <value> [--platform <platform>]
   {$script} list
   {$script} show <name>
@@ -115,6 +117,48 @@ function cmdBudget(array $pos, array $named): void
     $stmt->execute([$row['id'], $platform, $dailyAud]);
 
     echo "Budget set: {$name} / {$platform} = \${$dailyAud}/day AUD\n";
+}
+
+function cmdGlobalBudget(array $pos, array $named): void
+{
+    if (count($pos) < 2) {
+        echo "Error: global-budget requires <name> <daily>.\n";
+        usage();
+    }
+
+    [$projectName, $dailyRaw] = $pos;
+    $daily = (float) $dailyRaw;
+
+    $db      = DB::get();
+    $pStmt   = $db->prepare('SELECT id FROM projects WHERE name = ?');
+    $pStmt->execute([$projectName]);
+    $row = $pStmt->fetch();
+
+    if (!$row) {
+        echo "Error: project '{$projectName}' not found.\n";
+        exit(1);
+    }
+
+    $min            = isset($named['min'])      ? (float) $named['min']      : null;
+    $max            = isset($named['max'])      ? (float) $named['max']      : null;
+    $variance       = isset($named['variance']) ? (float) $named['variance'] : null;
+    $scalingEnabled = null;
+
+    if (isset($named['scaling'])) {
+        $scalingEnabled = strtolower($named['scaling']) === 'on';
+    }
+
+    $gb = new GlobalBudget();
+    $gb->set((int) $row['id'], $daily, $min, $max, $variance, $scalingEnabled);
+
+    $updated = $gb->get((int) $row['id']);
+
+    echo "Global budget set: {$projectName}\n";
+    printf("  Daily:    \$%.2f/day AUD\n",  $updated['daily_budget_aud']);
+    printf("  Min:      \$%.2f\n",           $updated['min_daily_budget_aud']);
+    printf("  Max:      \$%.2f\n",           $updated['max_daily_budget_aud']);
+    printf("  Variance: %.1f%%\n",           $updated['max_variance_pct']);
+    printf("  Scaling:  %s\n",               $updated['scaling_enabled'] ? 'on' : 'off');
 }
 
 function cmdGoals(array $pos, array $named): void
@@ -281,10 +325,11 @@ if (empty($positional)) {
 $command = array_shift($positional);
 
 match ($command) {
-    'create' => cmdCreate($positional, $named),
-    'budget' => cmdBudget($positional, $named),
-    'goals'  => cmdGoals($positional, $named),
-    'list'   => cmdList(),
-    'show'   => cmdShow($positional),
-    default  => usage(),
+    'create'        => cmdCreate($positional, $named),
+    'budget'        => cmdBudget($positional, $named),
+    'global-budget' => cmdGlobalBudget($positional, $named),
+    'goals'         => cmdGoals($positional, $named),
+    'list'          => cmdList(),
+    'show'          => cmdShow($positional),
+    default         => usage(),
 };

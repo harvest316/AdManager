@@ -363,3 +363,44 @@ CREATE TABLE IF NOT EXISTS cron_job_logs (
 
 CREATE INDEX IF NOT EXISTS idx_cron_logs_job ON cron_job_logs(job_id);
 CREATE INDEX IF NOT EXISTS idx_cron_logs_started ON cron_job_logs(started_at);
+
+-- Global budget management (revenue scaling)
+
+CREATE TABLE IF NOT EXISTS global_budgets (
+  id INTEGER PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) UNIQUE,
+  daily_budget_aud REAL NOT NULL,
+  min_daily_budget_aud REAL DEFAULT 0,
+  max_daily_budget_aud REAL DEFAULT 1000,
+  max_variance_pct REAL DEFAULT 25.0,
+  scaling_enabled INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_global_budgets_project ON global_budgets(project_id);
+
+CREATE TABLE IF NOT EXISTS revenue_events (
+  id INTEGER PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  source TEXT NOT NULL,
+  revenue_aud REAL NOT NULL,
+  date TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_revenue_project_date ON revenue_events(project_id, date);
+
+CREATE TABLE IF NOT EXISTS budget_adjustments (
+  id INTEGER PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  trigger_type TEXT NOT NULL,
+  old_global_budget REAL,
+  new_global_budget REAL,
+  revenue_baseline REAL,
+  revenue_current REAL,
+  detail_json TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_budget_adj_project ON budget_adjustments(project_id);
